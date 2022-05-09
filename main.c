@@ -5,6 +5,7 @@
 #include "minimap.h"
 #include "mmpriv.h"
 #include "ketopt.h"
+#include "chain_hardware.h"
 
 #define MM_VERSION "2.13-r850"
 
@@ -328,6 +329,24 @@ int main(int argc, char *argv[])
 	}
 	if (opt.best_n == 0 && (opt.flag&MM_F_CIGAR) && mm_verbose >= 2)
 		fprintf(stderr, "[WARNING]\033[1;31m `-N 0' reduces alignment accuracy. Please use --secondary=no to suppress secondary alignments.\033[0m\n");
+	
+#ifndef MIMIC_HW	
+
+#ifdef MEASURE_CHAINING_TIME
+	double hardware_init_start = realtime();
+#endif
+
+	// initialize OpenCL FPGA stuff (input/output buffers, kernels, command queues, etc)
+    if (!hardware_init(BUFFER_N)) {
+        return -1;
+    }
+
+#ifdef MEASURE_CHAINING_TIME
+	fprintf(stderr, "hardware_init_time: %.3f\n", (realtime() - hardware_init_start) * 1000);
+#endif
+
+#endif
+	
 	while ((mi = mm_idx_reader_read(idx_rdr, n_threads)) != 0) {
 		if ((opt.flag & MM_F_CIGAR) && (mi->flag & MM_I_NO_SEQ)) {
 			fprintf(stderr, "[ERROR] the prebuilt index doesn't contain sequences.\n");
@@ -375,5 +394,21 @@ int main(int argc, char *argv[])
 			fprintf(stderr, " %s", argv[i]);
 		fprintf(stderr, "\n[M::%s] Real time: %.3f sec; CPU: %.3f sec; Peak RSS: %.3f GB\n", __func__, realtime() - mm_realtime0, cputime(), peakrss() / 1024.0 / 1024.0 / 1024.0);
 	}
+
+#ifndef MIMIC_HW
+
+#ifdef MEASURE_CHAINING_TIME
+	double hardware_cleanup_start = realtime();
+#endif
+
+	// free the FPGA resources allocated
+    cleanup();
+
+#ifdef MEASURE_CHAINING_TIME
+	fprintf(stderr, "hardware_cleanup_time: %.3f\n", (realtime() - hardware_cleanup_start) * 1000);
+#endif
+
+#endif
+
 	return 0;
 }

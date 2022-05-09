@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include "kthread.h"
 
+#include <stdio.h> //kisaru
+#include "mmpriv.h" // kisaru
+
 #if (defined(WIN32) || defined(_WIN32)) && defined(_MSC_VER)
 #define __sync_fetch_and_add(ptr, addend)     _InterlockedExchangeAdd((void*)ptr, addend)
 #endif
@@ -39,6 +42,8 @@ static inline long steal_work(kt_for_t *t)
 
 static void *ktf_worker(void *data)
 {
+	double start = realtime(); //kisaru
+
 	ktf_worker_t *w = (ktf_worker_t*)data;
 	long i;
 	for (;;) {
@@ -48,7 +53,11 @@ static void *ktf_worker(void *data)
 	}
 	while ((i = steal_work(w->t)) >= 0)
 		w->t->func(w->t->data, i, w - w->t->w);
+
+	fprintf(stderr, "ktf_worker_time: %.3f\n", (realtime() - start) * 1000); //kisaru
+
 	pthread_exit(0);
+
 }
 
 void kt_for(int n_threads, void (*func)(void*,long,int), void *data, long n)

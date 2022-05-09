@@ -4,6 +4,9 @@
 #include "minimap.h"
 #include "mmpriv.h"
 #include "kalloc.h"
+#include "chain_hardware.h"
+
+//pthread_mutex_t h_lock;
 
 static const char LogTable256[256] = {
 #define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
@@ -19,65 +22,169 @@ static inline int ilog2_32(uint32_t v)
 	return (t = v>>8) ? 8 + LogTable256[t] : LogTable256[v];
 }
 
-mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int min_cnt, int min_sc, int is_cdna, int n_segs, int64_t n, mm128_t *a, int *n_u_, uint64_t **_u, void *km)
+mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int min_cnt, int min_sc, int is_cdna, int n_segs, int64_t n, mm128_t *a, int *n_u_, uint64_t **_u, void *km, int tid)
 { // TODO: make sure this works when n has more than 32 bits
 	int32_t k, *f, *p, *t, *v, n_u, n_v;
-	int64_t i, j, st = 0;
+	int64_t i, j, st;
 	uint64_t *u, *u2, sum_qspan = 0;
 	float avg_qspan;
 	mm128_t *b, *w;
 
 	if (_u) *_u = 0, *n_u_ = 0;
-	f = (int32_t*)kmalloc(km, n * 4);
-	p = (int32_t*)kmalloc(km, n * 4);
+	f = (int32_t*)kmalloc(km, (n + EXTRA_ELEMS) * 4);
+	p = (int32_t*)kmalloc(km, (n + EXTRA_ELEMS) * 4);
 	t = (int32_t*)kmalloc(km, n * 4);
-	v = (int32_t*)kmalloc(km, n * 4);
+	v = (int32_t*)kmalloc(km, (n + EXTRA_ELEMS) * 4);
 	memset(t, 0, n * 4);
 
 	for (i = 0; i < n; ++i) sum_qspan += a[i].y>>32&0xff;
-	avg_qspan = (float)sum_qspan / n;
+	avg_qspan = .01 * (float)sum_qspan / n;
 
-	// fill the score and backtrack arrays
-	for (i = 0; i < n; ++i) {
-		uint64_t ri = a[i].x;
-		int64_t max_j = -1;
-		int32_t qi = (int32_t)a[i].y, q_span = a[i].y>>32&0xff; // NB: only 8 bits of span is used!!!
-		int32_t max_f = q_span, n_skip = 0, min_d;
-		int32_t sidi = (a[i].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
-		while (st < i && ri > a[st].x + max_dist_x) ++st;
-		for (j = i - 1; j >= st; --j) {
-			int64_t dr = ri - a[j].x;
-			int32_t dq = qi - (int32_t)a[j].y, dd, sc, log_dd;
-			int32_t sidj = (a[j].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
-			if ((sidi == sidj && dr == 0) || dq <= 0) continue; // don't skip if an anchor is used by multiple segments; see below
-			if ((sidi == sidj && dq > max_dist_y) || dq > max_dist_x) continue;
-			dd = dr > dq? dr - dq : dq - dr;
-			if (sidi == sidj && dd > bw) continue;
-			if (n_segs > 1 && !is_cdna && sidi == sidj && dr > max_dist_y) continue;
-			min_d = dq < dr? dq : dr;
-			sc = min_d > q_span? q_span : dq < dr? dq : dr;
-			log_dd = dd? ilog2_32(dd) : 0;
-			if (is_cdna || sidi != sidj) {
-				int c_log, c_lin;
-				c_lin = (int)(dd * .01 * avg_qspan);
-				c_log = log_dd;
-				if (sidi != sidj && dr == 0) ++sc; // possibly due to overlapping paired ends; give a minor bonus
-				else if (dr > dq || sidi != sidj) sc -= c_lin < c_log? c_lin : c_log;
-				else sc -= c_lin + (c_log>>1);
-			} else sc -= (int)(dd * .01 * avg_qspan) + (log_dd>>1);
-			sc += f[j];
-			if (sc > max_f) {
-				max_f = sc, max_j = j;
-				if (n_skip > 0) --n_skip;
-			} else if (t[j] == i) {
-				if (++n_skip > max_skip)
-					break;
-			}
-			if (p[j] >= 0) t[p[j]] = i;
+
+#ifdef MEASURE_CHAINING_TIME
+	double chaining_start = realtime();
+	bool was_exec_on_hw = false;
+#endif
+
+
+	int * trip_count = (int *)kmalloc(km, (n + EXTRA_ELEMS) * 4);
+
+	/*--------- Calculating sw_hw_frac Start ------------*/
+	
+	long total_trip_count = 0;
+	st = 0;
+	bool is_hw_supported_call = true;
+	for (i = 0; i < n; i++) {
+		// determine and store the inner loop's trip count (max is INNER_LOOP_TRIP_COUNT_MAX)
+		while (st < i && a[i].x > a[st].x + max_dist_x) ++st;
+		int inner_loop_trip_count = i - st;
+		if (inner_loop_trip_count < 0) { // trip count is 0 if (i - st) is negative
+			inner_loop_trip_count = 0;
 		}
-		f[i] = max_f, p[i] = max_j;
-		v[i] = max_j >= 0 && v[max_j] > max_f? v[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
+		if (inner_loop_trip_count > 64) { 
+			inner_loop_trip_count = 64;
+			//is_hw_supported_call = false;
+			//break;
+		}
+
+		trip_count[i] = inner_loop_trip_count;
+
+		total_trip_count += inner_loop_trip_count;
 	}
+	
+	float sw_hw_frac = 0;
+	if (n > 0 && is_hw_supported_call) { // can have some other threshold than 0 for n (eg. MIN_ANCHORS) to force processing small calls on software
+		sw_hw_frac = (float) total_trip_count / (n * 64);
+	}
+
+	/*--------- Calculating sw_hw_frac End ------------*/
+
+#ifdef MEASURE_CHAINING_TIME
+	double overhead = realtime() - chaining_start;
+#endif
+
+
+#ifdef VERIFY_OUTPUT
+	int32_t * f_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
+	int32_t * p_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
+	int32_t * v_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
+#endif
+
+
+#ifndef VERIFY_OUTPUT
+	if (sw_hw_frac > BETTER_ON_HW_THRESH) { // execute on HW
+#endif
+
+
+#ifndef VERIFY_OUTPUT
+		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, avg_qspan, a, f, p, v, trip_count, tid);
+#else
+		double hw_start = realtime();
+		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, avg_qspan, a, f_hw, p_hw, v_hw, trip_count, tid);
+		double hw_time = (realtime() - hw_start) * 1000;
+#endif
+
+
+#ifdef MEASURE_CHAINING_TIME
+		was_exec_on_hw = true;
+#endif
+
+
+#ifndef VERIFY_OUTPUT
+	} else { // execute on SW
+#endif
+	
+		//fprintf(stderr, "[INFO] Processing call with n = %ld, sw_hw_frac = %.2f on software..\n", n, sw_hw_frac);
+		double sw_start = realtime();
+
+		st = 0;
+		for (i = 0; i < n; ++i) {
+			uint64_t ri = a[i].x;
+			int64_t max_j = -1;
+			int32_t qi = (int32_t)a[i].y, q_span = a[i].y>>32&0xff; // NB: only 8 bits of span is used!!!
+			int32_t max_f = q_span, n_skip = 0, min_d;
+			int32_t sidi = (a[i].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
+			while (st < i && ri > a[st].x + max_dist_x) ++st;
+			for (j = i - 1; j >= st && j > i - 65; --j) {
+				int64_t dr = ri - a[j].x;
+				int32_t dq = qi - (int32_t)a[j].y, dd, sc, log_dd;
+				int32_t sidj = (a[j].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
+
+				if ((sidi == sidj && dr == 0) || dq <= 0) continue; // don't skip if an anchor is used by multiple segments; see below
+				if ((sidi == sidj && dq > max_dist_y) || dq > max_dist_x) continue;
+				dd = dr > dq? dr - dq : dq - dr;
+				if (sidi == sidj && dd > bw) continue;
+				if (n_segs > 1 && !is_cdna && sidi == sidj && dr > max_dist_y) continue;
+				min_d = dq < dr? dq : dr;
+				sc = min_d > q_span? q_span : dq < dr? dq : dr;
+				log_dd = dd? ilog2_32(dd) : 0;
+				sc -= (int)(dd * avg_qspan) + (log_dd>>1);
+				sc += f[j];
+				if (sc > max_f) {
+					max_f = sc, max_j = j;
+				} 
+			}
+			f[i] = max_f, p[i] = max_j;
+			v[i] = max_j >= 0 && v[max_j] > max_f? v[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
+		}
+		
+		// fprintf(stderr, "tid: %d, chaining_time: %.3f\n", tid, (realtime() - sw_start) * 1000);
+		
+#ifndef VERIFY_OUTPUT
+	}
+#endif
+
+#ifdef MEASURE_CHAINING_TIME
+	double overhead2_start = realtime();
+#endif
+
+	kfree(km, trip_count);
+
+#ifdef MEASURE_CHAINING_TIME
+	double end = realtime();
+	overhead += (end - overhead2_start);
+
+	fprintf(stderr, "tid: %d, chaining_time: %.3f, overhead: %.3f, was_exec_on_hw: %d, sw_hw_frac: %.3f\n", tid, (end - chaining_start) * 1000, overhead * 1000, was_exec_on_hw, sw_hw_frac);
+#endif
+
+
+#ifdef VERIFY_OUTPUT
+	int mismatched = 0;
+	for (i = 0; i < n; i++) {
+		if (f[i] != f_hw[i] || p[i] != p_hw[i] || v[i] != v_hw[i]) {
+			//fprintf(stderr, "f[i] = %d, f_hw[i] = %d | p[i] = %d, p_hw[i] = %d | v[i] = %d, v_hw[i] = %d\n", f[i], f_hw[i], p[i], p_hw[i], v[i], v_hw[i]);
+			mismatched++;
+		}
+	}
+	if (mismatched > 0) {
+		fprintf(stderr, "mismatched = %d/%ld\n", mismatched, n);
+		//fprintf(stderr, "total_trip_count = %d, sw_hw_frac = %f\n", total_trip_count, sw_hw_frac);
+	}
+
+	free(f_hw);
+	free(p_hw);
+	free(v_hw);
+#endif
 
 	// find the ending positions of chains
 	memset(t, 0, n * 4);

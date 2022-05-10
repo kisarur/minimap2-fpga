@@ -47,10 +47,6 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
                 mm128_t * a, cl_int* f, cl_int* p, cl_int* v, cl_int * trip_count, int tid);
 bool hardware_init(long);
 void cleanup();
-static void device_info_ulong( cl_device_id device, cl_device_info param, const char* name);
-static void device_info_uint( cl_device_id device, cl_device_info param, const char* name);
-static void device_info_bool( cl_device_id device, cl_device_info param, const char* name);
-static void device_info_string( cl_device_id device, cl_device_info param, const char* name);
-static void display_device_info( cl_device_id device );
+
 
 

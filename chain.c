@@ -114,15 +114,14 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	} else { // execute on SW
 #endif
 	
-		//fprintf(stderr, "[INFO] Processing call with n = %ld, sw_hw_frac = %.2f on software..\n", n, sw_hw_frac);
-		double sw_start = realtime();
+		// double sw_start = realtime();
 
 		st = 0;
 		for (i = 0; i < n; ++i) {
 			uint64_t ri = a[i].x;
 			int64_t max_j = -1;
 			int32_t qi = (int32_t)a[i].y, q_span = a[i].y>>32&0xff; // NB: only 8 bits of span is used!!!
-			int32_t max_f = q_span, n_skip = 0, min_d;
+			int32_t max_f = q_span, min_d;
 			int32_t sidi = (a[i].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
 			while (st < i && ri > a[st].x + max_dist_x) ++st;
 			for (j = i - 1; j >= st && j > i - 65; --j) {

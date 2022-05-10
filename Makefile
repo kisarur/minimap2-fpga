@@ -164,6 +164,7 @@ depend:
 align.o: minimap.h mmpriv.h bseq.h ksw2.h kalloc.h
 bseq.o: bseq.h kvec.h kalloc.h kseq.h
 chain.o: minimap.h mmpriv.h bseq.h kalloc.h chain_hardware.h
+chain_hardware.o: mmpriv.h chain_hardware.h
 esterr.o: mmpriv.h minimap.h bseq.h
 example.o: minimap.h kseq.h
 format.o: kalloc.h mmpriv.h minimap.h bseq.h
@@ -177,7 +178,7 @@ ksw2_ll_sse.o: ksw2.h kalloc.h
 kthread.o: kthread.h
 main.o: bseq.h minimap.h mmpriv.h ketopt.h chain_hardware.h
 map.o: kthread.h kvec.h kalloc.h sdust.h mmpriv.h minimap.h bseq.h khash.h
-map.o: ksort.h
+map.o: ksort.h chain_hardware.h
 misc.o: mmpriv.h minimap.h bseq.h ksort.h
 options.o: mmpriv.h minimap.h bseq.h
 pe.o: mmpriv.h minimap.h bseq.h kvec.h kalloc.h ksort.h

@@ -7,4 +7,5 @@
 minimap2
 mappy.c
 bin/
+results/
 !bin/minimap2_opencl.aocx

@@ -2,7 +2,7 @@
 #include "mmpriv.h"
 
 // control whether the emulator should be used.
-static bool use_emulator = true;
+static bool use_emulator = false;
 
 using namespace aocl_utils;
 

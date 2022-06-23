@@ -44,7 +44,7 @@ using namespace std;
 #define STRING_BUFFER_LEN 1024
 
 int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_float avg_qspan,
-                mm128_t * a, cl_int* f, cl_int* p, cl_int* v, cl_int * trip_count, int tid);
+                mm128_t * a, cl_int* f, cl_int* p, cl_int* v, int tid);
 bool hardware_init(long);
 void cleanup();
 

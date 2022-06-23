@@ -47,8 +47,6 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 #endif
 
 
-	int * trip_count = (int *)kmalloc(km, (n + EXTRA_ELEMS) * 4);
-
 	/*--------- Calculating sw_hw_frac Start ------------*/
 	
 	long total_trip_count = 0;
@@ -66,8 +64,6 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 			//is_hw_supported_call = false;
 			//break;
 		}
-
-		trip_count[i] = inner_loop_trip_count;
 
 		total_trip_count += inner_loop_trip_count;
 	}
@@ -97,10 +93,10 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 
 
 #ifndef VERIFY_OUTPUT
-		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, avg_qspan, a, f, p, v, trip_count, tid);
+		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, avg_qspan, a, f, p, v, tid);
 #else
 		double hw_start = realtime();
-		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, avg_qspan, a, f_hw, p_hw, v_hw, trip_count, tid);
+		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, avg_qspan, a, f_hw, p_hw, v_hw, tid);
 		double hw_time = (realtime() - hw_start) * 1000;
 #endif
 
@@ -156,8 +152,6 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 #ifdef MEASURE_CHAINING_TIME
 	double overhead2_start = realtime();
 #endif
-
-	kfree(km, trip_count);
 
 #ifdef MEASURE_CHAINING_TIME
 	double end = realtime();

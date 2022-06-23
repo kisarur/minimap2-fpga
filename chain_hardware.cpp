@@ -16,7 +16,6 @@ static cl_program program = NULL;
 
 // For input and output buffers
 cl_mem input_a_buf[NUM_HW_KERNELS];
-cl_mem input_trip_count_buf[NUM_HW_KERNELS];
 cl_mem output_f_buf[NUM_HW_KERNELS];
 cl_mem output_p_buf[NUM_HW_KERNELS];
 cl_mem output_v_buf[NUM_HW_KERNELS];
@@ -30,7 +29,7 @@ pthread_mutex_t hw_lock[NUM_HW_KERNELS] = {PTHREAD_MUTEX_INITIALIZER};
 
 // Run chaining on OpenCL hardware
 int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_float avg_qspan,
-                mm128_t * a, cl_int* f, cl_int* p, cl_int* v, cl_int* trip_count, int tid) {
+                mm128_t * a, cl_int* f, cl_int* p, cl_int* v, int tid) {
     
     if (n == 0) {
         return 0;
@@ -92,7 +91,7 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     double kernel_start = realtime();
 #endif
 
-    cl_event write_event[2];
+    cl_event write_event[1];
     cl_event kernel_event[1];
     cl_event read_event[3];
     cl_int status;
@@ -101,10 +100,6 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     status = clEnqueueWriteBuffer(queue[kernel_id], input_a_buf[kernel_id], CL_FALSE,
         0, (n + EXTRA_ELEMS) * sizeof(cl_ulong2), a, 0, NULL, &write_event[0]);
     checkError(status, "Failed to transfer input a");
-
-    status = clEnqueueWriteBuffer(queue[kernel_id], input_trip_count_buf[kernel_id], CL_FALSE,
-        0, (n + EXTRA_ELEMS) * sizeof(cl_int), trip_count, 0, NULL, &write_event[1]);
-    checkError(status, "Failed to transfer input trip_count");
 
     // Wait until the a trasfer is completed.
     //clWaitForEvents(1, write_event);
@@ -141,10 +136,7 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     status = clSetKernelArg(kernels[kernel_id], 8, sizeof(cl_mem), &output_v_buf[kernel_id]);
     checkError(status, "Failed to set argument 8");
 
-    status = clSetKernelArg(kernels[kernel_id], 9, sizeof(cl_mem), &input_trip_count_buf[kernel_id]);
-    checkError(status, "Failed to set argument 9");
-
-    status = clEnqueueTask(queue[kernel_id], kernels[kernel_id], 2, write_event, &kernel_event[0]);
+    status = clEnqueueTask(queue[kernel_id], kernels[kernel_id], 1, write_event, &kernel_event[0]);
     checkError(status, "Failed to launch kernel");
 
     // Wait until the kernel work is completed.
@@ -174,7 +166,6 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
 
     // Release events
     clReleaseEvent(write_event[0]);
-    clReleaseEvent(write_event[1]);
     clReleaseEvent(kernel_event[0]);
     for (int i = 0; i < 3; i++) {
         clReleaseEvent(read_event[i]);
@@ -408,10 +399,6 @@ bool hardware_init(long buf_size) {
                                         buf_size * sizeof(cl_ulong2), NULL, &status);
         checkError(status, "Failed to create buffer for input a");
 
-        input_trip_count_buf[i] = clCreateBuffer(context, CL_MEM_READ_ONLY,
-                                        buf_size * sizeof(cl_int), NULL, &status);
-        checkError(status, "Failed to create buffer for input trip_count");
-
         // Output buffers
         output_f_buf[i] = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
                                             buf_size * sizeof(cl_int), NULL, &status);
@@ -440,11 +427,6 @@ void cleanup() {
     if (input_a_buf) {
         for (int i = 0; i < NUM_HW_KERNELS; i++) {
             clReleaseMemObject(input_a_buf[i]);
-        }
-    }
-    if (input_trip_count_buf) {
-        for (int i = 0; i < NUM_HW_KERNELS; i++) {
-            clReleaseMemObject(input_trip_count_buf[i]);
         }
     }
     if (output_f_buf) {

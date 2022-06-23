@@ -6,7 +6,7 @@ rm -rf bin/minimap2_opencl_emul.aocx
 aoc -march=emulator -v device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocx
 
 # compile host code
-make
+make -j
 
 # run host with emulation
 bin/host -ax map-ont -t 4 /storage/hasindu/genome/human_genome/hg38noAlt.idx /storage/hasindu/NA12878_prom_subsample/reads.fastq > /dev/null

@@ -17,7 +17,7 @@ aocl help > /dev/null || source ../init_env.sh
 date
 
 #  to direct output to /dev/null
-bin/host -ax map-ont -t 40 /share/ScratchGeneral/kisliy/minimap2_inout/hg38noAlt.idx /share/ScratchGeneral/kisliy/minimap2_inout/reads.fastq > /dev/null
+bin/host -ax map-ont -t 1 /share/ScratchGeneral/kisliy/minimap2_inout/hg38noAlt.idx /share/ScratchGeneral/kisliy/minimap2_inout/reads.fastq > /dev/null
 # bin/host -ax map-ont -t 40 -K 5.5G /share/ScratchGeneral/kisliy/minimap2_inout/hg38noAlt.idx /share/ScratchGeneral/kisliy/minimap2_inout/reads.fastq > /dev/null
 
 # for standard run (with .sam output written to a file)

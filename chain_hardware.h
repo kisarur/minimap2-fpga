@@ -24,6 +24,8 @@
 // this also includes the overhead taken for threshold computation and extra malloc for trip_count
 // #define MEASURE_CHAINING_TIME // chain.c
 
+#define MEASURE_CORE_CHAINING_TIME // chain.c (to measure total time taken for core part of chaining. IMPORTANT: minimap2 should be run with 1 thread to get accurate timing)
+
 // #define MEASURE_CHAINING_TIME_HW_FINE // chain_hardware.cpp (measures chaining time and wait time seperately in hardware chaining)
  
 #define EXTRA_ELEMS 100 // added to temporarily fix the issue with parallel execution of OpenCL hardware kernels 
@@ -32,7 +34,7 @@
 using namespace std;
 
 // threshold for SW-HW split (0 - all on hardware, 1 - all on software)
-#define BETTER_ON_HW_THRESH 0.2
+#define BETTER_ON_HW_THRESH 1
 
 // Important: don't change the value below unless you recompile hardware code (device/minimap2_opencl.cl)
 #define NUM_HW_KERNELS 4

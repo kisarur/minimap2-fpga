@@ -7,6 +7,7 @@ rm -rf bin/minimap2_opencl_emul.aocx
 aoc -march=emulator -v device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocx
 
 # compile host code
+sed -i '/static bool use_emulator/c\static bool use_emulator = true;' chain_hardware.cpp
 make -j
 
 # run host with emulation

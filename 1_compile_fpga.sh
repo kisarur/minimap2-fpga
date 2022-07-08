@@ -2,7 +2,7 @@
 
 FILE=minimap2_opencl
 
-aocl help > /dev/null || source ../init_env.sh
+aocl help > /dev/null || source init_env.sh
 rm -rf bin/*
 aoc device/$FILE.cl -o bin/$FILE.aocx -board=pac_a10 -report
 mv bin/$FILE.aocx bin/$FILE.tmp.aocx

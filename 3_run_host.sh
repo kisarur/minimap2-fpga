@@ -1,4 +1,4 @@
-aocl help > /dev/null || source ../init_env.sh
+aocl help > /dev/null || source init_env.sh
 
 
 # for i in {1..5}

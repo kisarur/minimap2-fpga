@@ -10,6 +10,8 @@
 extern double core_chaining_time_total;
 #endif
 
+extern float SW_HW_THRESHOLD;
+
 static const char LogTable256[256] = {
 #define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
 	-1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -94,7 +96,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 
 
 #ifndef VERIFY_OUTPUT
-	if (sw_hw_frac > BETTER_ON_HW_THRESH) { // execute on HW
+	if (sw_hw_frac > SW_HW_THRESHOLD) { // execute on HW
 #endif
 
 

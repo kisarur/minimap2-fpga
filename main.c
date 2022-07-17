@@ -11,6 +11,10 @@
 	double core_chaining_time_total;
 #endif
 
+// get SW_HW_THRESHOLD used for HW/SW split from environment variable  (if env var is not set, SW_HW_THRESHOLD is set to 0.2)
+const char* SW_HW_THRESHOLD_ENV = getenv("SW_HW_THRESHOLD");
+float SW_HW_THRESHOLD = (SW_HW_THRESHOLD_ENV != NULL) ? atof(SW_HW_THRESHOLD_ENV) : 0.2;
+
 #define MM_VERSION "2.13-r850"
 
 #ifdef __linux__
@@ -106,6 +110,8 @@ int main(int argc, char *argv[])
 #ifdef MEASURE_CORE_CHAINING_TIME
 	core_chaining_time_total = 0;
 #endif
+
+	fprintf(stderr, "[INFO] SW_HW_THRESHOLD is set to %f\n", SW_HW_THRESHOLD);
 
 	const char *opt_str = "2aSDw:k:K:t:r:f:Vv:g:G:I:d:XT:s:x:Hcp:M:n:z:A:B:O:E:m:N:Qu:R:hF:LC:yYP";
 	ketopt_t o = KETOPT_INIT;

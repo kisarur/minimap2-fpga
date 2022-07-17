@@ -33,9 +33,6 @@
 
 using namespace std;
 
-// threshold for SW-HW split (0 - all on hardware, 1 - all on software)
-#define BETTER_ON_HW_THRESH 1
-
 // Important: don't change the value below unless you recompile hardware code (device/minimap2_opencl.cl)
 #define NUM_HW_KERNELS 4
 

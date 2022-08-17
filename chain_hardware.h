@@ -16,25 +16,30 @@
 
 #include "minimap.h"
 
-//#define DEBUG_HW          // chain_hardware.cpp (to print out steps in hardware processing)
-//#define VERIFY_OUTPUT       // chain.c (to run both on software and hardware and cross-check the outputs)
-//#define MIMIC_HW            // chain_hardware.cpp (to mimic hardware on software -- used for debugging with logical hardware simulation)
+// #define DEBUG_HW          // chain_hardware.cpp (to print out steps in hardware processing)
+// #define VERIFY_OUTPUT       // chain.c (to run both on software and hardware and cross-check the outputs)
+// #define MIMIC_HW            // chain_hardware.cpp (to mimic hardware on software -- used for debugging with logical hardware simulation)
 
 // used for measuring the time taken for each chaining task (only the time taken by the section computed on hardware/software)
 // this also includes the overhead taken for threshold computation and extra malloc for trip_count
 // #define MEASURE_CHAINING_TIME // chain.c
 
-#define MEASURE_CORE_CHAINING_TIME // chain.c (to measure total time taken for core part of chaining. IMPORTANT: minimap2 should be run with 1 thread to get accurate timing)
+// #define MEASURE_CORE_CHAINING_TIME // chain.c (to measure total time taken for core part of chaining. IMPORTANT: minimap2 should be run with 1 thread to get accurate timing)
 
 // #define MEASURE_CHAINING_TIME_HW_FINE // chain_hardware.cpp (measures chaining time and wait time seperately in hardware chaining)
  
-#define EXTRA_ELEMS 100 // added to temporarily fix the issue with parallel execution of OpenCL hardware kernels 
+#define EXTRA_ELEMS 0 // added to temporarily fix the issue with parallel execution of OpenCL hardware kernels 
                         // (i.e. all input/output arrays used in hardware chaining are filled with EXTRA_ELEMS no. of elements)
 
 using namespace std;
 
-// Important: don't change the value below unless you recompile hardware code (device/minimap2_opencl.cl)
-#define NUM_HW_KERNELS 4
+// Important: don't change the values below unless you recompile hardware code (device/minimap2_opencl.cl)
+#define NUM_HW_KERNELS 1
+#define TRIPCOUNT_PER_SUBPART 64
+#define MAX_SUBPARTS 6
+#define MAX_TRIPCOUNT (TRIPCOUNT_PER_SUBPART * MAX_SUBPARTS)
+
+#define Q_SPAN 15 // "seed length" used in hardware chaining. Important: change this if the default seed length used in minimap2 changes 
 
 #define DEVICE_MAX_N 332000000
 #define BUFFER_MAX_N (DEVICE_MAX_N / 2)
@@ -42,8 +47,8 @@ using namespace std;
 
 #define STRING_BUFFER_LEN 1024
 
-int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_float avg_qspan,
-                mm128_t * a, cl_int* f, cl_int* p, cl_int* v, int tid);
+int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_int q_span, cl_float avg_qspan,
+                mm128_t * a, cl_int* f, cl_int* p, cl_int* v, cl_uchar* num_subparts, cl_long total_subparts, int tid);
 bool hardware_init(long);
 void cleanup();
 

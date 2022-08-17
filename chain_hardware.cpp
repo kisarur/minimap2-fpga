@@ -16,6 +16,7 @@ static cl_program program = NULL;
 
 // For input and output buffers
 cl_mem input_a_buf[NUM_HW_KERNELS];
+cl_mem input_num_subparts_buf[NUM_HW_KERNELS];
 cl_mem output_f_buf[NUM_HW_KERNELS];
 cl_mem output_p_buf[NUM_HW_KERNELS];
 cl_mem output_v_buf[NUM_HW_KERNELS];
@@ -28,8 +29,8 @@ pthread_mutex_t hw_lock[NUM_HW_KERNELS] = {PTHREAD_MUTEX_INITIALIZER};
 #ifndef MIMIC_HW
 
 // Run chaining on OpenCL hardware
-int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_float avg_qspan,
-                mm128_t * a, cl_int* f, cl_int* p, cl_int* v, int tid) {
+int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_int q_span, cl_float avg_qspan_scaled,
+                mm128_t * a, cl_int* f, cl_int* p, cl_int* v, cl_uchar* num_subparts, cl_long total_subparts, int tid) {
     
     if (n == 0) {
         return 0;
@@ -91,7 +92,7 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     double kernel_start = realtime();
 #endif
 
-    cl_event write_event[1];
+    cl_event write_event[2];
     cl_event kernel_event[1];
     cl_event read_event[3];
     cl_int status;
@@ -101,6 +102,10 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
         0, (n + EXTRA_ELEMS) * sizeof(cl_ulong2), a, 0, NULL, &write_event[0]);
     checkError(status, "Failed to transfer input a");
 
+    status = clEnqueueWriteBuffer(queue[kernel_id], input_num_subparts_buf[kernel_id], CL_FALSE,
+        0, (n + EXTRA_ELEMS) * sizeof(cl_uchar), num_subparts, 0, NULL, &write_event[1]);
+    checkError(status, "Failed to transfer input num_subparts");
+
     // Wait until the a trasfer is completed.
     //clWaitForEvents(1, write_event);
 
@@ -109,7 +114,7 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
 #endif
     
     // Set the kernel arguments.
-    status = clSetKernelArg(kernels[kernel_id], 0, sizeof(cl_long), &n);
+    status = clSetKernelArg(kernels[kernel_id], 0, sizeof(cl_long), &total_subparts);
     checkError(status, "Failed to set argument 0");                
 
     status = clSetKernelArg(kernels[kernel_id], 1, sizeof(cl_int), &max_dist_x);
@@ -121,22 +126,28 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     status = clSetKernelArg(kernels[kernel_id], 3, sizeof(cl_int), &bw);
     checkError(status, "Failed to set argument 3");
 
-    status = clSetKernelArg(kernels[kernel_id], 4, sizeof(cl_float), &avg_qspan);
+    status = clSetKernelArg(kernels[kernel_id], 4, sizeof(cl_int), &q_span);
     checkError(status, "Failed to set argument 4");
 
-    status = clSetKernelArg(kernels[kernel_id], 5, sizeof(cl_mem), &input_a_buf[kernel_id]);
+    status = clSetKernelArg(kernels[kernel_id], 5, sizeof(cl_float), &avg_qspan_scaled);
     checkError(status, "Failed to set argument 5");
 
-    status = clSetKernelArg(kernels[kernel_id], 6, sizeof(cl_mem), &output_f_buf[kernel_id]);
+    status = clSetKernelArg(kernels[kernel_id], 6, sizeof(cl_mem), &input_a_buf[kernel_id]);
     checkError(status, "Failed to set argument 6");
 
-    status = clSetKernelArg(kernels[kernel_id], 7, sizeof(cl_mem), &output_p_buf[kernel_id]);
+    status = clSetKernelArg(kernels[kernel_id], 7, sizeof(cl_mem), &output_f_buf[kernel_id]);
     checkError(status, "Failed to set argument 7");
 
-    status = clSetKernelArg(kernels[kernel_id], 8, sizeof(cl_mem), &output_v_buf[kernel_id]);
+    status = clSetKernelArg(kernels[kernel_id], 8, sizeof(cl_mem), &output_p_buf[kernel_id]);
     checkError(status, "Failed to set argument 8");
 
-    status = clEnqueueTask(queue[kernel_id], kernels[kernel_id], 1, write_event, &kernel_event[0]);
+    status = clSetKernelArg(kernels[kernel_id], 9, sizeof(cl_mem), &output_v_buf[kernel_id]);
+    checkError(status, "Failed to set argument 9");
+
+    status = clSetKernelArg(kernels[kernel_id], 10, sizeof(cl_mem), &input_num_subparts_buf[kernel_id]);
+    checkError(status, "Failed to set argument 10");
+
+    status = clEnqueueTask(queue[kernel_id], kernels[kernel_id], 2, write_event, &kernel_event[0]);
     checkError(status, "Failed to launch kernel");
 
     // Wait until the kernel work is completed.
@@ -166,6 +177,7 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
 
     // Release events
     clReleaseEvent(write_event[0]);
+    clReleaseEvent(write_event[1]);
     clReleaseEvent(kernel_event[0]);
     for (int i = 0; i < 3; i++) {
         clReleaseEvent(read_event[i]);
@@ -399,6 +411,10 @@ bool hardware_init(long buf_size) {
                                         buf_size * sizeof(cl_ulong2), NULL, &status);
         checkError(status, "Failed to create buffer for input a");
 
+        input_num_subparts_buf[i] = clCreateBuffer(context, CL_MEM_READ_ONLY,
+                                        buf_size * sizeof(cl_uchar), NULL, &status);
+        checkError(status, "Failed to create buffer for input num_subparts");
+
         // Output buffers
         output_f_buf[i] = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
                                             buf_size * sizeof(cl_int), NULL, &status);
@@ -427,6 +443,11 @@ void cleanup() {
     if (input_a_buf) {
         for (int i = 0; i < NUM_HW_KERNELS; i++) {
             clReleaseMemObject(input_a_buf[i]);
+        }
+    }
+    if (input_num_subparts_buf) {
+        for (int i = 0; i < NUM_HW_KERNELS; i++) {
+            clReleaseMemObject(input_num_subparts_buf[i]);
         }
     }
     if (output_f_buf) {

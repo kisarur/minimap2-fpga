@@ -31,7 +31,6 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	int32_t k, *f, *p, *t, *v, n_u, n_v;
 	int64_t i, j, st;
 	uint64_t *u, *u2, sum_qspan = 0;
-	float avg_qspan;
 	mm128_t *b, *w;
 
 	if (_u) *_u = 0, *n_u_ = 0;
@@ -42,7 +41,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	memset(t, 0, n * 4);
 
 	for (i = 0; i < n; ++i) sum_qspan += a[i].y>>32&0xff;
-	avg_qspan = .01 * (float)sum_qspan / n;
+	float avg_qspan_scaled = .01 * (float)sum_qspan / n;
 
 
 #ifdef MEASURE_CHAINING_TIME
@@ -56,25 +55,27 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	long total_trip_count = 0;
 	st = 0;
 	bool is_hw_supported_call = true;
+	int64_t total_subparts = 0;
+	unsigned char * num_subparts = (unsigned char*)kmalloc(km, (n + EXTRA_ELEMS));
+
 	for (i = 0; i < n; i++) {
 		// determine and store the inner loop's trip count (max is INNER_LOOP_TRIP_COUNT_MAX)
 		while (st < i && a[i].x > a[st].x + max_dist_x) ++st;
 		int inner_loop_trip_count = i - st;
-		if (inner_loop_trip_count < 0) { // trip count is 0 if (i - st) is negative
-			inner_loop_trip_count = 0;
+		if (inner_loop_trip_count > MAX_TRIPCOUNT) { 
+			inner_loop_trip_count = MAX_TRIPCOUNT;
 		}
-		if (inner_loop_trip_count > 64) { 
-			inner_loop_trip_count = 64;
-			//is_hw_supported_call = false;
-			//break;
-		}
-
 		total_trip_count += inner_loop_trip_count;
+
+		int subparts = inner_loop_trip_count / TRIPCOUNT_PER_SUBPART;
+		if (inner_loop_trip_count == 0 || inner_loop_trip_count % TRIPCOUNT_PER_SUBPART > 0) subparts++;
+		num_subparts[i] = (unsigned char)subparts;
+		total_subparts += subparts;
 	}
 	
 	float sw_hw_frac = 0;
 	if (n > 0 && is_hw_supported_call) { // can have some other threshold than 0 for n (eg. MIN_ANCHORS) to force processing small calls on software
-		sw_hw_frac = (float) total_trip_count / (n * 64);
+		sw_hw_frac = (float) total_trip_count / (n * MAX_TRIPCOUNT);
 	}
 
 	/*--------- Calculating sw_hw_frac End ------------*/
@@ -101,11 +102,9 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 
 
 #ifndef VERIFY_OUTPUT
-		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, avg_qspan, a, f, p, v, tid);
+		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f, p, v, num_subparts, total_subparts, tid);
 #else
-		double hw_start = realtime();
-		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, avg_qspan, a, f_hw, p_hw, v_hw, tid);
-		double hw_time = (realtime() - hw_start) * 1000;
+		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f_hw, p_hw, v_hw, num_subparts, total_subparts, tid);
 #endif
 
 
@@ -128,7 +127,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 			int32_t max_f = q_span, min_d;
 			int32_t sidi = (a[i].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
 			while (st < i && ri > a[st].x + max_dist_x) ++st;
-			for (j = i - 1; j >= st && j > i - 65; --j) {
+			for (j = i - 1; j >= st && j > (i - MAX_TRIPCOUNT - 1); --j) {
 				int64_t dr = ri - a[j].x;
 				int32_t dq = qi - (int32_t)a[j].y, dd, sc, log_dd;
 				int32_t sidj = (a[j].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
@@ -141,7 +140,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 				min_d = dq < dr? dq : dr;
 				sc = min_d > q_span? q_span : dq < dr? dq : dr;
 				log_dd = dd? ilog2_32(dd) : 0;
-				sc -= (int)(dd * avg_qspan) + (log_dd>>1);
+				sc -= (int)(dd * avg_qspan_scaled) + (log_dd>>1);
 				sc += f[j];
 				if (sc > max_f) {
 					max_f = sc, max_j = j;
@@ -178,7 +177,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	int mismatched = 0;
 	for (i = 0; i < n; i++) {
 		if (f[i] != f_hw[i] || p[i] != p_hw[i] || v[i] != v_hw[i]) {
-			//fprintf(stderr, "f[i] = %d, f_hw[i] = %d | p[i] = %d, p_hw[i] = %d | v[i] = %d, v_hw[i] = %d\n", f[i], f_hw[i], p[i], p_hw[i], v[i], v_hw[i]);
+			fprintf(stderr, "i = %d | f = %d, f_hw = %d | p = %d, p_hw = %d | v = %d, v_hw = %d | %d\n", i, f[i], f_hw[i], p[i], p_hw[i], v[i], v_hw[i], num_subparts[i]);
 			mismatched++;
 		}
 	}
@@ -191,6 +190,8 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	free(p_hw);
 	free(v_hw);
 #endif
+
+kfree(km, num_subparts);
 
 	// find the ending positions of chains
 	memset(t, 0, n * 4);

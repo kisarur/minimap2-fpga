@@ -36,7 +36,7 @@ using namespace std;
 // Important: don't change the values below unless you recompile hardware code (device/minimap2_opencl.cl)
 #define NUM_HW_KERNELS 1
 #define TRIPCOUNT_PER_SUBPART 64
-#define MAX_SUBPARTS 6
+#define MAX_SUBPARTS 8
 #define MAX_TRIPCOUNT (TRIPCOUNT_PER_SUBPART * MAX_SUBPARTS)
 
 #define Q_SPAN 15 // "seed length" used in hardware chaining. Important: change this if the default seed length used in minimap2 changes 
@@ -48,7 +48,7 @@ using namespace std;
 #define STRING_BUFFER_LEN 1024
 
 int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_int q_span, cl_float avg_qspan,
-                mm128_t * a, cl_int* f, cl_int* p, cl_int* v, cl_uchar* num_subparts, cl_long total_subparts, int tid);
+                mm128_t * a, cl_int* f, cl_int* p, cl_uchar* num_subparts, cl_long total_subparts, int tid);
 bool hardware_init(long);
 void cleanup();
 

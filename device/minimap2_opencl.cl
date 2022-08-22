@@ -61,48 +61,40 @@ inline int compute_sc(unsigned long a_x, unsigned long a_y, int f, unsigned long
 __kernel void minimap2_opencl0(long total_subparts,
                          int max_dist_x, int max_dist_y, int bw, int q_span, float avg_qspan_scaled, 
 						 __global const ulong2 *restrict a,
-                         __global int *restrict f, __global int *restrict p, __global int *restrict v,
+                         __global int *restrict f, __global int *restrict p,
                          __global const unsigned char *restrict num_subparts)
 {
 	unsigned long a_x_local0[TRIPCOUNT_PER_SUBPART + 1] = {0};
 	int a_y_local0[TRIPCOUNT_PER_SUBPART + 1] = {0};
 	int f_local0[TRIPCOUNT_PER_SUBPART + 1] = {0};
-    int v_local0[TRIPCOUNT_PER_SUBPART + 1] = {0};
 
 	unsigned long a_x_local1[TRIPCOUNT_PER_SUBPART] = {0};
 	int a_y_local1[TRIPCOUNT_PER_SUBPART] = {0};
 	int f_local1[TRIPCOUNT_PER_SUBPART] = {0};
-    int v_local1[TRIPCOUNT_PER_SUBPART] = {0};
     
 	unsigned long a_x_local2[TRIPCOUNT_PER_SUBPART] = {0};
 	int a_y_local2[TRIPCOUNT_PER_SUBPART] = {0};
 	int f_local2[TRIPCOUNT_PER_SUBPART] = {0};
-    int v_local2[TRIPCOUNT_PER_SUBPART] = {0};
     
 	unsigned long a_x_local3[TRIPCOUNT_PER_SUBPART] = {0};
 	int a_y_local3[TRIPCOUNT_PER_SUBPART] = {0};
 	int f_local3[TRIPCOUNT_PER_SUBPART] = {0};
-    int v_local3[TRIPCOUNT_PER_SUBPART] = {0};
 
     unsigned long a_x_local4[TRIPCOUNT_PER_SUBPART] = {0};
 	int a_y_local4[TRIPCOUNT_PER_SUBPART] = {0};
 	int f_local4[TRIPCOUNT_PER_SUBPART] = {0};
-    int v_local4[TRIPCOUNT_PER_SUBPART] = {0};
 
     unsigned long a_x_local5[TRIPCOUNT_PER_SUBPART] = {0};
 	int a_y_local5[TRIPCOUNT_PER_SUBPART] = {0};
 	int f_local5[TRIPCOUNT_PER_SUBPART] = {0};
-    int v_local5[TRIPCOUNT_PER_SUBPART] = {0};
     
-    // unsigned long a_x_local6[TRIPCOUNT_PER_SUBPART] = {0};
-	// int a_y_local6[TRIPCOUNT_PER_SUBPART] = {0};
-	// int f_local6[TRIPCOUNT_PER_SUBPART] = {0};
-    // int v_local6[TRIPCOUNT_PER_SUBPART] = {0};
+    unsigned long a_x_local6[TRIPCOUNT_PER_SUBPART] = {0};
+	int a_y_local6[TRIPCOUNT_PER_SUBPART] = {0};
+	int f_local6[TRIPCOUNT_PER_SUBPART] = {0};
 
-    // unsigned long a_x_local7[TRIPCOUNT_PER_SUBPART] = {0};
-	// int a_y_local7[TRIPCOUNT_PER_SUBPART] = {0};
-	// int f_local7[TRIPCOUNT_PER_SUBPART] = {0};
-    // int v_local7[TRIPCOUNT_PER_SUBPART] = {0};
+    unsigned long a_x_local7[TRIPCOUNT_PER_SUBPART] = {0};
+	int a_y_local7[TRIPCOUNT_PER_SUBPART] = {0};
+	int f_local7[TRIPCOUNT_PER_SUBPART] = {0};
 
     unsigned char subparts_processed = 0;
     unsigned char subparts_to_process = 0;
@@ -110,6 +102,8 @@ __kernel void minimap2_opencl0(long total_subparts,
 	// fill the score and backtrack arrays
     long i = 0;
 	for (long g = 0; g < total_subparts; ++g) {
+
+        // printf("%ld\t%ld\t%d\t%d\n", total_subparts, i, subparts_processed, subparts_to_process);
 
         if (subparts_processed == 0) {
             ulong2 a_local = __prefetching_load(&a[i]);
@@ -123,68 +117,59 @@ __kernel void minimap2_opencl0(long total_subparts,
 		
 		long max_j = -1;
 		int max_f = q_span;
-        int peak_sc = q_span;
 
 		#pragma unroll
 		for (int j = TRIPCOUNT_PER_SUBPART; j > 0; j--) {
 			unsigned long a_x_local_j, a_y_local_j;
-			int f_local_j, v_local_j;
+			int f_local_j;
 
 			if (subparts_processed == 0) {
 				a_x_local_j = a_x_local0[j];
 				a_y_local_j = a_y_local0[j];
 				f_local_j = f_local0[j];
-				v_local_j = v_local0[j];
 			}
 
 			if (subparts_processed == 1) {
 				a_x_local_j = a_x_local1[j - 1];
 				a_y_local_j = a_y_local1[j - 1];
 				f_local_j = f_local1[j - 1];
-				v_local_j = v_local1[j - 1];
 			}
 
             if (subparts_processed == 2) {
 				a_x_local_j = a_x_local2[j - 1];
 				a_y_local_j = a_y_local2[j - 1];
 				f_local_j = f_local2[j - 1];
-				v_local_j = v_local2[j - 1];
 			}
 
             if (subparts_processed == 3) {
 				a_x_local_j = a_x_local3[j - 1];
 				a_y_local_j = a_y_local3[j - 1];
 				f_local_j = f_local3[j - 1];
-				v_local_j = v_local3[j - 1];
 			}
 
             if (subparts_processed == 4) {
 				a_x_local_j = a_x_local4[j - 1];
 				a_y_local_j = a_y_local4[j - 1];
 				f_local_j = f_local4[j - 1];
-				v_local_j = v_local4[j - 1];
 			}
 
             if (subparts_processed == 5) {
 				a_x_local_j = a_x_local5[j - 1];
 				a_y_local_j = a_y_local5[j - 1];
 				f_local_j = f_local5[j - 1];
-				v_local_j = v_local5[j - 1];
 			}
 
-            // if (subparts_processed == 6) {
-			// 	a_x_local_j = a_x_local6[j - 1];
-			// 	a_y_local_j = a_y_local6[j - 1];
-			// 	f_local_j = f_local6[j - 1];
-			// 	v_local_j = v_local6[j - 1];
-			// }
+            if (subparts_processed == 6) {
+				a_x_local_j = a_x_local6[j - 1];
+				a_y_local_j = a_y_local6[j - 1];
+				f_local_j = f_local6[j - 1];
+			}
 
-            // if (subparts_processed == 7) {
-			// 	a_x_local_j = a_x_local7[j - 1];
-			// 	a_y_local_j = a_y_local7[j - 1];
-			// 	f_local_j = f_local7[j - 1];
-			// 	v_local_j = v_local7[j - 1];
-			// }
+            if (subparts_processed == 7) {
+				a_x_local_j = a_x_local7[j - 1];
+				a_y_local_j = a_y_local7[j - 1];
+				f_local_j = f_local7[j - 1];
+			}
 
             int sc = compute_sc(a_x_local_j, a_y_local_j, f_local_j, ri, qi, max_dist_x, max_dist_y, bw, q_span, avg_qspan_scaled);
 			if (sc >= max_f && sc != q_span) {
@@ -195,61 +180,53 @@ __kernel void minimap2_opencl0(long total_subparts,
                 if (subparts_processed == 3) max_j = i - j - 3 * TRIPCOUNT_PER_SUBPART;
                 if (subparts_processed == 4) max_j = i - j - 4 * TRIPCOUNT_PER_SUBPART;
                 if (subparts_processed == 5) max_j = i - j - 5 * TRIPCOUNT_PER_SUBPART;
-                // if (subparts_processed == 6) max_j = i - j - 6 * TRIPCOUNT_PER_SUBPART;
-                // if (subparts_processed == 7) max_j = i - j - 7 * TRIPCOUNT_PER_SUBPART;
-				peak_sc = v_local_j > max_f ? v_local_j : max_f;
+                if (subparts_processed == 6) max_j = i - j - 6 * TRIPCOUNT_PER_SUBPART;
+                if (subparts_processed == 7) max_j = i - j - 7 * TRIPCOUNT_PER_SUBPART;
 			}
 		}
 
         if (max_f > f_local0[0]) {
             f[i] = max_f;
             p[i] = max_j;
-            v[i] = peak_sc;
             f_local0[0] = max_f;
-            v_local0[0] = peak_sc;
         }
 
         subparts_processed++;
+        
+        #pragma unroll
+        for (int reg = TRIPCOUNT_PER_SUBPART - 1; reg > 0; reg--) {
+            if (subparts_processed == subparts_to_process) {
+                f_local7[reg] = f_local7[reg - 1];
+                a_x_local7[reg] = a_x_local7[reg - 1];
+                a_y_local7[reg] = a_y_local7[reg - 1];
+            }
+        }
 
-        // #pragma unroll
-        // for (int reg = TRIPCOUNT_PER_SUBPART - 1; reg > 0; reg--) {
-        //     if (subparts_processed == subparts_to_process) {
-        //         f_local7[reg] = f_local7[reg - 1];
-        //         v_local7[reg] = v_local7[reg - 1];
-        //         a_x_local7[reg] = a_x_local7[reg - 1];
-        //         a_y_local7[reg] = a_y_local7[reg - 1];
-        //     }
-        // }
+        if (subparts_processed == subparts_to_process) {
+            f_local7[0] = f_local6[TRIPCOUNT_PER_SUBPART - 1];
+            a_x_local7[0] = a_x_local6[TRIPCOUNT_PER_SUBPART - 1];
+            a_y_local7[0] = a_y_local6[TRIPCOUNT_PER_SUBPART - 1];
+        }
 
-        // if (subparts_processed == subparts_to_process) {
-        //     f_local7[0] = f_local6[TRIPCOUNT_PER_SUBPART - 1];
-        //     v_local7[0] = v_local6[TRIPCOUNT_PER_SUBPART - 1];
-        //     a_x_local7[0] = a_x_local6[TRIPCOUNT_PER_SUBPART - 1];
-        //     a_y_local7[0] = a_y_local6[TRIPCOUNT_PER_SUBPART - 1];
-        // }
+        #pragma unroll
+        for (int reg = TRIPCOUNT_PER_SUBPART - 1; reg > 0; reg--) {
+            if (subparts_processed == subparts_to_process) {
+                f_local6[reg] = f_local6[reg - 1];
+                a_x_local6[reg] = a_x_local6[reg - 1];
+                a_y_local6[reg] = a_y_local6[reg - 1];
+            }
+        }
 
-        // #pragma unroll
-        // for (int reg = TRIPCOUNT_PER_SUBPART - 1; reg > 0; reg--) {
-        //     if (subparts_processed == subparts_to_process) {
-        //         f_local6[reg] = f_local6[reg - 1];
-        //         v_local6[reg] = v_local6[reg - 1];
-        //         a_x_local6[reg] = a_x_local6[reg - 1];
-        //         a_y_local6[reg] = a_y_local6[reg - 1];
-        //     }
-        // }
-
-        // if (subparts_processed == subparts_to_process) {
-        //     f_local6[0] = f_local5[TRIPCOUNT_PER_SUBPART - 1];
-        //     v_local6[0] = v_local5[TRIPCOUNT_PER_SUBPART - 1];
-        //     a_x_local6[0] = a_x_local5[TRIPCOUNT_PER_SUBPART - 1];
-        //     a_y_local6[0] = a_y_local5[TRIPCOUNT_PER_SUBPART - 1];
-        // }
+        if (subparts_processed == subparts_to_process) {
+            f_local6[0] = f_local5[TRIPCOUNT_PER_SUBPART - 1];
+            a_x_local6[0] = a_x_local5[TRIPCOUNT_PER_SUBPART - 1];
+            a_y_local6[0] = a_y_local5[TRIPCOUNT_PER_SUBPART - 1];
+        }
 
         #pragma unroll
         for (int reg = TRIPCOUNT_PER_SUBPART - 1; reg > 0; reg--) {
             if (subparts_processed == subparts_to_process) {
                 f_local5[reg] = f_local5[reg - 1];
-                v_local5[reg] = v_local5[reg - 1];
                 a_x_local5[reg] = a_x_local5[reg - 1];
                 a_y_local5[reg] = a_y_local5[reg - 1];
             }
@@ -257,7 +234,6 @@ __kernel void minimap2_opencl0(long total_subparts,
 
         if (subparts_processed == subparts_to_process) {
             f_local5[0] = f_local4[TRIPCOUNT_PER_SUBPART - 1];
-            v_local5[0] = v_local4[TRIPCOUNT_PER_SUBPART - 1];
             a_x_local5[0] = a_x_local4[TRIPCOUNT_PER_SUBPART - 1];
             a_y_local5[0] = a_y_local4[TRIPCOUNT_PER_SUBPART - 1];
         }
@@ -266,7 +242,6 @@ __kernel void minimap2_opencl0(long total_subparts,
         for (int reg = TRIPCOUNT_PER_SUBPART - 1; reg > 0; reg--) {
             if (subparts_processed == subparts_to_process) {
                 f_local4[reg] = f_local4[reg - 1];
-                v_local4[reg] = v_local4[reg - 1];
                 a_x_local4[reg] = a_x_local4[reg - 1];
                 a_y_local4[reg] = a_y_local4[reg - 1];
             }
@@ -274,7 +249,6 @@ __kernel void minimap2_opencl0(long total_subparts,
 
         if (subparts_processed == subparts_to_process) {
             f_local4[0] = f_local3[TRIPCOUNT_PER_SUBPART - 1];
-            v_local4[0] = v_local3[TRIPCOUNT_PER_SUBPART - 1];
             a_x_local4[0] = a_x_local3[TRIPCOUNT_PER_SUBPART - 1];
             a_y_local4[0] = a_y_local3[TRIPCOUNT_PER_SUBPART - 1];
         }
@@ -283,7 +257,6 @@ __kernel void minimap2_opencl0(long total_subparts,
         for (int reg = TRIPCOUNT_PER_SUBPART - 1; reg > 0; reg--) {
             if (subparts_processed == subparts_to_process) {
                 f_local3[reg] = f_local3[reg - 1];
-                v_local3[reg] = v_local3[reg - 1];
                 a_x_local3[reg] = a_x_local3[reg - 1];
                 a_y_local3[reg] = a_y_local3[reg - 1];
             }
@@ -291,7 +264,6 @@ __kernel void minimap2_opencl0(long total_subparts,
 
         if (subparts_processed == subparts_to_process) {
             f_local3[0] = f_local2[TRIPCOUNT_PER_SUBPART - 1];
-            v_local3[0] = v_local2[TRIPCOUNT_PER_SUBPART - 1];
             a_x_local3[0] = a_x_local2[TRIPCOUNT_PER_SUBPART - 1];
             a_y_local3[0] = a_y_local2[TRIPCOUNT_PER_SUBPART - 1];
         }
@@ -300,7 +272,6 @@ __kernel void minimap2_opencl0(long total_subparts,
         for (int reg = TRIPCOUNT_PER_SUBPART - 1; reg > 0; reg--) {
             if (subparts_processed == subparts_to_process) {
                 f_local2[reg] = f_local2[reg - 1];
-                v_local2[reg] = v_local2[reg - 1];
                 a_x_local2[reg] = a_x_local2[reg - 1];
                 a_y_local2[reg] = a_y_local2[reg - 1];
             }
@@ -308,7 +279,6 @@ __kernel void minimap2_opencl0(long total_subparts,
 
         if (subparts_processed == subparts_to_process) {
             f_local2[0] = f_local1[TRIPCOUNT_PER_SUBPART - 1];
-            v_local2[0] = v_local1[TRIPCOUNT_PER_SUBPART - 1];
             a_x_local2[0] = a_x_local1[TRIPCOUNT_PER_SUBPART - 1];
             a_y_local2[0] = a_y_local1[TRIPCOUNT_PER_SUBPART - 1];
         }
@@ -317,7 +287,6 @@ __kernel void minimap2_opencl0(long total_subparts,
         for (int reg = TRIPCOUNT_PER_SUBPART - 1; reg > 0; reg--) {
             if (subparts_processed == subparts_to_process) {
                 f_local1[reg] = f_local1[reg - 1];
-                v_local1[reg] = v_local1[reg - 1];
                 a_x_local1[reg] = a_x_local1[reg - 1];
                 a_y_local1[reg] = a_y_local1[reg - 1];
             }
@@ -325,7 +294,6 @@ __kernel void minimap2_opencl0(long total_subparts,
 
         if (subparts_processed == subparts_to_process) {
             f_local1[0] = f_local0[TRIPCOUNT_PER_SUBPART];
-            v_local1[0] = v_local0[TRIPCOUNT_PER_SUBPART];
             a_x_local1[0] = a_x_local0[TRIPCOUNT_PER_SUBPART];
             a_y_local1[0] = a_y_local0[TRIPCOUNT_PER_SUBPART];
         }
@@ -334,7 +302,6 @@ __kernel void minimap2_opencl0(long total_subparts,
         for (int reg = TRIPCOUNT_PER_SUBPART; reg > 0; reg--) {
             if (subparts_processed == subparts_to_process) {
                 f_local0[reg] = f_local0[reg - 1];
-                v_local0[reg] = v_local0[reg - 1];
                 a_x_local0[reg] = a_x_local0[reg - 1];
                 a_y_local0[reg] = a_y_local0[reg - 1];
             }

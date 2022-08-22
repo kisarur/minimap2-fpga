@@ -2,7 +2,7 @@
 #include "mmpriv.h"
 
 // control whether the emulator should be used.
-static bool use_emulator = false;
+static bool use_emulator = true;
 
 using namespace aocl_utils;
 
@@ -19,7 +19,6 @@ cl_mem input_a_buf[NUM_HW_KERNELS];
 cl_mem input_num_subparts_buf[NUM_HW_KERNELS];
 cl_mem output_f_buf[NUM_HW_KERNELS];
 cl_mem output_p_buf[NUM_HW_KERNELS];
-cl_mem output_v_buf[NUM_HW_KERNELS];
 
 pthread_mutex_t hw_lock[NUM_HW_KERNELS] = {PTHREAD_MUTEX_INITIALIZER};
 
@@ -30,7 +29,7 @@ pthread_mutex_t hw_lock[NUM_HW_KERNELS] = {PTHREAD_MUTEX_INITIALIZER};
 
 // Run chaining on OpenCL hardware
 int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_int q_span, cl_float avg_qspan_scaled,
-                mm128_t * a, cl_int* f, cl_int* p, cl_int* v, cl_uchar* num_subparts, cl_long total_subparts, int tid) {
+                mm128_t * a, cl_int* f, cl_int* p, cl_uchar* num_subparts, cl_long total_subparts, int tid) {
     
     if (n == 0) {
         return 0;
@@ -94,7 +93,7 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
 
     cl_event write_event[2];
     cl_event kernel_event[1];
-    cl_event read_event[3];
+    cl_event read_event[2];
     cl_int status;
 
     // Transfer inputs to device.
@@ -141,11 +140,8 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     status = clSetKernelArg(kernels[kernel_id], 8, sizeof(cl_mem), &output_p_buf[kernel_id]);
     checkError(status, "Failed to set argument 8");
 
-    status = clSetKernelArg(kernels[kernel_id], 9, sizeof(cl_mem), &output_v_buf[kernel_id]);
+    status = clSetKernelArg(kernels[kernel_id], 9, sizeof(cl_mem), &input_num_subparts_buf[kernel_id]);
     checkError(status, "Failed to set argument 9");
-
-    status = clSetKernelArg(kernels[kernel_id], 10, sizeof(cl_mem), &input_num_subparts_buf[kernel_id]);
-    checkError(status, "Failed to set argument 10");
 
     status = clEnqueueTask(queue[kernel_id], kernels[kernel_id], 2, write_event, &kernel_event[0]);
     checkError(status, "Failed to launch kernel");
@@ -164,9 +160,6 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     status = clEnqueueReadBuffer(queue[kernel_id], output_p_buf[kernel_id], CL_FALSE,
         0, (n + EXTRA_ELEMS) * sizeof(cl_int), p, 1, kernel_event, &read_event[1]);
 
-    status = clEnqueueReadBuffer(queue[kernel_id], output_v_buf[kernel_id], CL_FALSE,
-        0, (n + EXTRA_ELEMS) * sizeof(cl_int), v, 1, kernel_event, &read_event[2]);
-
     // Wait for read events to finish.
     //clWaitForEvents(3, read_event);
     clFinish(queue[kernel_id]);
@@ -179,7 +172,7 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     clReleaseEvent(write_event[0]);
     clReleaseEvent(write_event[1]);
     clReleaseEvent(kernel_event[0]);
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
         clReleaseEvent(read_event[i]);
     }
 
@@ -423,10 +416,6 @@ bool hardware_init(long buf_size) {
         output_p_buf[i] = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
                                             buf_size * sizeof(cl_int), NULL, &status);
         checkError(status, "Failed to create buffer for p");
-
-        output_v_buf[i] = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
-                                            buf_size * sizeof(cl_int), NULL, &status);
-        checkError(status, "Failed to create buffer for v");
     }
 
     return true;
@@ -458,11 +447,6 @@ void cleanup() {
     if (output_p_buf) {
         for (int i = 0; i < NUM_HW_KERNELS; i++) {
             clReleaseMemObject(output_p_buf[i]);
-        }
-    }
-    if (output_v_buf) {
-        for (int i = 0; i < NUM_HW_KERNELS; i++) {
-            clReleaseMemObject(output_v_buf[i]);
         }
     }
     if (program) {

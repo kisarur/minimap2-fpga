@@ -58,6 +58,10 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	int64_t total_subparts = 0;
 	unsigned char * num_subparts = (unsigned char*)kmalloc(km, (n + EXTRA_ELEMS));
 
+#ifdef VERIFY_OUTPUT
+	int32_t * tc = (int32_t*)malloc(n * sizeof(int32_t));
+#endif 
+
 	for (i = 0; i < n; i++) {
 		// determine and store the inner loop's trip count (max is INNER_LOOP_TRIP_COUNT_MAX)
 		while (st < i && a[i].x > a[st].x + max_dist_x) ++st;
@@ -66,6 +70,9 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 			inner_loop_trip_count = MAX_TRIPCOUNT;
 		}
 		total_trip_count += inner_loop_trip_count;
+#ifdef VERIFY_OUTPUT
+		tc[i] = inner_loop_trip_count;
+#endif 
 
 		int subparts = inner_loop_trip_count / TRIPCOUNT_PER_SUBPART;
 		if (inner_loop_trip_count == 0 || inner_loop_trip_count % TRIPCOUNT_PER_SUBPART > 0) subparts++;
@@ -102,9 +109,22 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 
 
 #ifndef VERIFY_OUTPUT
-		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f, p, v, num_subparts, total_subparts, tid);
+		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f, p, num_subparts, total_subparts, tid);
+
+		for (i = 0; i < n; ++i) {
+			int32_t max_f = f[i];
+			int64_t max_j = p[i];
+			v[i] = max_j >= 0 && v[max_j] > max_f? v[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
+		}
 #else
-		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f_hw, p_hw, v_hw, num_subparts, total_subparts, tid);
+		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f_hw, p_hw, num_subparts, total_subparts, tid);
+
+		for (i = 0; i < n; ++i) {
+			int32_t max_f = f_hw[i];
+			int64_t max_j = p_hw[i];
+			v_hw[i] = max_j >= 0 && v_hw[max_j] > max_f? v_hw[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
+ 
+		}
 #endif
 
 
@@ -177,7 +197,8 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	int mismatched = 0;
 	for (i = 0; i < n; i++) {
 		if (f[i] != f_hw[i] || p[i] != p_hw[i] || v[i] != v_hw[i]) {
-			fprintf(stderr, "i = %d | f = %d, f_hw = %d | p = %d, p_hw = %d | v = %d, v_hw = %d | %d\n", i, f[i], f_hw[i], p[i], p_hw[i], v[i], v_hw[i], num_subparts[i]);
+			fprintf(stderr, "n = %ld, i = %d | f = %d, f_hw = %d | p = %d, p_hw = %d | v = %d, v_hw = %d | %d, %d\n", n, i, f[i], f_hw[i], p[i], p_hw[i], v[i], v_hw[i], num_subparts[i], tc[i]);
+			exit(1);
 			mismatched++;
 		}
 	}
@@ -189,6 +210,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	free(f_hw);
 	free(p_hw);
 	free(v_hw);
+	free(tc);
 #endif
 
 kfree(km, num_subparts);

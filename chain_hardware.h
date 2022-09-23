@@ -31,6 +31,8 @@
 #define EXTRA_ELEMS 0 // added to temporarily fix the issue with parallel execution of OpenCL hardware kernels 
                         // (i.e. all input/output arrays used in hardware chaining are filled with EXTRA_ELEMS no. of elements)
 
+#define PROCESS_ON_SW_IF_HW_BUSY // controls whether to process chaining tasks (chosen for hardware) on software if hardware is busy
+
 using namespace std;
 
 // Important: don't change the values below unless you recompile hardware code (device/minimap2_opencl.cl)

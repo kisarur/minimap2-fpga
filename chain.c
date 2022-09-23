@@ -105,39 +105,67 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 
 #ifndef VERIFY_OUTPUT
 	if (sw_hw_frac > SW_HW_THRESHOLD) { // execute on HW
-#endif
 
+		int hw_chain = run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f, p, num_subparts, total_subparts, tid);
 
-#ifndef VERIFY_OUTPUT
-		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f, p, num_subparts, total_subparts, tid);
+#ifdef PROCESS_ON_SW_IF_HW_BUSY
+		if (hw_chain == 0) {
+			for (i = 0; i < n; ++i) {
+				int32_t max_f = f[i];
+				int64_t max_j = p[i];
+				v[i] = max_j >= 0 && v[max_j] > max_f? v[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
+			}
+		} else {
+			st = 0;
+			for (i = 0; i < n; ++i) {
+				uint64_t ri = a[i].x;
+				int64_t max_j = -1;
+				int32_t qi = (int32_t)a[i].y, q_span = a[i].y>>32&0xff; // NB: only 8 bits of span is used!!!
+				int32_t max_f = q_span, min_d;
+				int32_t sidi = (a[i].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
+				while (st < i && ri > a[st].x + max_dist_x) ++st;
+				for (j = i - 1; j >= st && j > (i - MAX_TRIPCOUNT - 1); --j) {
+					int64_t dr = ri - a[j].x;
+					int32_t dq = qi - (int32_t)a[j].y, dd, sc, log_dd;
+					int32_t sidj = (a[j].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
 
+					if ((sidi == sidj && dr == 0) || dq <= 0) continue; // don't skip if an anchor is used by multiple segments; see below
+					if ((sidi == sidj && dq > max_dist_y) || dq > max_dist_x) continue;
+					dd = dr > dq? dr - dq : dq - dr;
+					if (sidi == sidj && dd > bw) continue;
+					if (n_segs > 1 && !is_cdna && sidi == sidj && dr > max_dist_y) continue;
+					min_d = dq < dr? dq : dr;
+					sc = min_d > q_span? q_span : dq < dr? dq : dr;
+					log_dd = dd? ilog2_32(dd) : 0;
+					sc -= (int)(dd * avg_qspan_scaled) + (log_dd>>1);
+					sc += f[j];
+					if (sc > max_f) {
+						max_f = sc, max_j = j;
+					} 
+				}
+				f[i] = max_f, p[i] = max_j;
+				v[i] = max_j >= 0 && v[max_j] > max_f? v[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
+			}
+		}
+#else
 		for (i = 0; i < n; ++i) {
 			int32_t max_f = f[i];
 			int64_t max_j = p[i];
 			v[i] = max_j >= 0 && v[max_j] > max_f? v[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
 		}
-#else
+#endif
+
+	} else { // execute on SW
+
+#else 
 		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f_hw, p_hw, num_subparts, total_subparts, tid);
 
 		for (i = 0; i < n; ++i) {
 			int32_t max_f = f_hw[i];
 			int64_t max_j = p_hw[i];
 			v_hw[i] = max_j >= 0 && v_hw[max_j] > max_f? v_hw[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
- 
 		}
 #endif
-
-
-#ifdef MEASURE_CHAINING_TIME
-		was_exec_on_hw = true;
-#endif
-
-
-#ifndef VERIFY_OUTPUT
-	} else { // execute on SW
-#endif
-	
-		// double sw_start = realtime();
 
 		st = 0;
 		for (i = 0; i < n; ++i) {
@@ -189,7 +217,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	double end = realtime();
 	overhead += (end - overhead2_start);
 
-	fprintf(stderr, "tid: %d, chaining_time: %.3f, overhead: %.3f, was_exec_on_hw: %d, sw_hw_frac: %.3f\n", tid, (end - chaining_start) * 1000, overhead * 1000, was_exec_on_hw, sw_hw_frac);
+	fprintf(stderr, "tid: %d, chaining_time: %.3f, overhead: %.3f, sw_hw_frac: %.3f\n", tid, (end - chaining_start) * 1000, overhead * 1000, sw_hw_frac);
 #endif
 
 

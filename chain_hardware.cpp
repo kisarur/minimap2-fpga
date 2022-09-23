@@ -45,18 +45,22 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     double start = realtime();
 #endif
     
-    /* // scheduling 0 (basic scheduling)
-    int kernel_id = tid % NUM_HW_KERNELS;
-    pthread_mutex_lock(&hw_lock[kernel_id]); */
-   
+    // scheduling 0 (basic scheduling)
+#if defined(VERIFY_OUTPUT) || !defined(PROCESS_ON_SW_IF_HW_BUSY)
+    pthread_mutex_lock(&hw_lock[0]);
+#else
+    int ret = pthread_mutex_trylock(&hw_lock[0]);
+    if (ret != 0) return -1;
+#endif
+    int kernel_id = 0;
     
     // scheduling 1
-    int kernel_id = -1;
+    /* int kernel_id = -1;
     int ret = -1;
     while (ret != 0) {
         kernel_id = (kernel_id + 1) % NUM_HW_KERNELS;
         ret = pthread_mutex_trylock(&hw_lock[kernel_id]);
-    } 
+    }  */
 
     /* 
     // scheduling 2
@@ -176,7 +180,8 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
         clReleaseEvent(read_event[i]);
     }
 
-    pthread_mutex_unlock(&hw_lock[kernel_id]);
+    // pthread_mutex_unlock(&hw_lock[kernel_id]);
+    pthread_mutex_unlock(&hw_lock[0]);
 
     /* 
     pthread_mutex_lock(&status_lock[kernel_id]);
@@ -188,6 +193,8 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
 #ifdef MEASURE_CHAINING_TIME_HW_FINE    
     fprintf(stderr, "tid: %d, kernel_id: %d, queued_time: %.3f, start_time: %.3f, end_time: %.3f\n", tid, kernel_id, start * 1000, kernel_start * 1000, realtime() * 1000);
 #endif 
+
+    return 0;
 
 }
 

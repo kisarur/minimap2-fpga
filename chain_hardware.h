@@ -32,7 +32,7 @@
 
 #define PROCESS_ON_SW_IF_HW_BUSY // controls whether to process chaining tasks (chosen for hardware) on software if hardware is busy
 
-#define ENABLE_MAX_SKIP_ON_SW // enables max_skip heuristic for chaining on software
+// #define ENABLE_MAX_SKIP_ON_SW // enables max_skip heuristic for chaining on software
 
 using namespace std;
 

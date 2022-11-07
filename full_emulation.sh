@@ -9,8 +9,8 @@ export LD_LIBRARY_PATH=/home/kisliy/opt/gcc-9.1.0/lib64:$LD_LIBRARY_PATH # for n
 
 # compile kernel code for emulation
 rm bin/minimap2_opencl_emul.aocx
-# aoc -march=emulator -v device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocx
-aoc -march=emulator -v device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocx -I $INTELFPGAOCLSDKROOT/include/kernel_headers
+aoc -march=emulator -v device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocx
+# aoc -march=emulator -v device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocx -I $INTELFPGAOCLSDKROOT/include/kernel_headers
 
 # for intermediate compilation while generating OpenCL reports 
 # aoc -rtl device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocr -board=a10gx -report # scylla

@@ -17,8 +17,7 @@
 #include "minimap.h"
 
 // #define DEBUG_HW          // chain_hardware.cpp (to print out steps in hardware processing)
-// #define VERIFY_OUTPUT       // chain.c (to run both on software and hardware and cross-check the outputs)
-// #define MIMIC_HW            // chain_hardware.cpp (to mimic hardware on software -- used for debugging with logical hardware simulation)
+#define VERIFY_OUTPUT       // chain.c (to run both on software and hardware and cross-check the outputs)
 
 // used for measuring the time taken for each chaining task (only the time taken by the section computed on hardware/software)
 // this also includes the overhead taken for threshold computation and extra malloc for trip_count
@@ -32,6 +31,8 @@
                         // (i.e. all input/output arrays used in hardware chaining are filled with EXTRA_ELEMS no. of elements)
 
 #define PROCESS_ON_SW_IF_HW_BUSY // controls whether to process chaining tasks (chosen for hardware) on software if hardware is busy
+
+// #define ENABLE_MAX_SKIP_ON_SW // enables max_skip heuristic for chaining on software
 
 using namespace std;
 

@@ -9,7 +9,8 @@ export LD_LIBRARY_PATH=/home/kisliy/opt/gcc-9.1.0/lib64:$LD_LIBRARY_PATH # for n
 
 # compile kernel code for emulation
 rm bin/minimap2_opencl_emul.aocx
-aoc -march=emulator -v device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocx
+# aoc -march=emulator -v device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocx
+aoc -march=emulator -v device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocx -I $INTELFPGAOCLSDKROOT/include/kernel_headers
 
 # for intermediate compilation while generating OpenCL reports 
 # aoc -rtl device/minimap2_opencl.cl -o bin/minimap2_opencl_emul.aocr -board=a10gx -report # scylla
@@ -23,3 +24,4 @@ make -j
 # run host with hardware emulation
 # bin/host -ax map-ont -t 20 /storage/hasindu/genome/human_genome/hg38noAlt.idx /storage/hasindu/NA12878_prom_subsample/reads.fastq > /dev/null # scylla
 bin/host -ax map-ont -t 20 /share/ScratchGeneral/kisliy/minimap2_inout/hg38noAlt.idx /share/ScratchGeneral/kisliy/minimap2_inout/reads.fastq > /dev/null # brenner-fpga
+# bin/host -ax map-ont -t 1 /share/ScratchGeneral/kisliy/minimap2_inout/hg38noAlt.idx /share/ScratchGeneral/kisliy/minimap2_inout/reads.fastq # brenner-fpga

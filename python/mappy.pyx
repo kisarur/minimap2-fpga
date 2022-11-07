@@ -3,7 +3,7 @@ from libc.stdlib cimport free
 cimport cmappy
 import sys
 
-__version__ = '2.13'
+__version__ = '2.18'
 
 cmappy.mm_reset_timer()
 
@@ -113,6 +113,7 @@ cdef class Aligner:
 	cdef cmappy.mm_mapopt_t map_opt
 
 	def __cinit__(self, fn_idx_in=None, preset=None, k=None, w=None, min_cnt=None, min_chain_score=None, min_dp_score=None, bw=None, best_n=None, n_threads=3, fn_idx_out=None, max_frag_len=None, extra_flags=None, seq=None, scoring=None):
+		self._idx = NULL
 		cmappy.mm_set_opt(NULL, &self.idx_opt, &self.map_opt) # set the default options
 		if preset is not None:
 			cmappy.mm_set_opt(str.encode(preset), &self.idx_opt, &self.map_opt) # apply preset
@@ -142,7 +143,7 @@ cdef class Aligner:
 			if fn_idx_out is None:
 				r = cmappy.mm_idx_reader_open(str.encode(fn_idx_in), &self.idx_opt, NULL)
 			else:
-				r = cmappy.mm_idx_reader_open(str.encode(fn_idx_in), &self.idx_opt, fn_idx_out)
+				r = cmappy.mm_idx_reader_open(str.encode(fn_idx_in), &self.idx_opt, str.encode(fn_idx_out))
 			if r is not NULL:
 				self._idx = cmappy.mm_idx_reader_read(r, n_threads) # NB: ONLY read the first part
 				cmappy.mm_idx_reader_close(r)
@@ -170,6 +171,7 @@ cdef class Aligner:
 		cdef void *km
 		cdef cmappy.mm_mapopt_t map_opt
 
+		if self._idx == NULL: return
 		map_opt = self.map_opt
 		if max_frag_len is not None: map_opt.max_frag_len = max_frag_len
 		if extra_flags is not None: map_opt.flag |= extra_flags
@@ -186,27 +188,36 @@ cdef class Aligner:
 			_seq2 = seq2 if isinstance(seq2, bytes) else seq2.encode()
 			regs = cmappy.mm_map_aux(self._idx, _seq, _seq2, &n_regs, b._b, &map_opt)
 
-		for i in range(n_regs):
-			cmappy.mm_reg2hitpy(self._idx, &regs[i], &h)
-			cigar, _cs, _MD = [], '', ''
-			for k in range(h.n_cigar32): # convert the 32-bit CIGAR encoding to Python array
-				c = h.cigar32[k]
-				cigar.append([c>>4, c&0xf])
-			if cs or MD: # generate the cs and/or the MD tag, if requested
-				if cs:
-					l_cs_str = cmappy.mm_gen_cs(km, &cs_str, &m_cs_str, self._idx, &regs[i], _seq, 1)
-					_cs = cs_str[:l_cs_str] if isinstance(cs_str, str) else cs_str[:l_cs_str].decode()
-				if MD:
-					l_cs_str = cmappy.mm_gen_MD(km, &cs_str, &m_cs_str, self._idx, &regs[i], _seq)
-					_MD = cs_str[:l_cs_str] if isinstance(cs_str, str) else cs_str[:l_cs_str].decode()
-			yield Alignment(h.ctg, h.ctg_len, h.ctg_start, h.ctg_end, h.strand, h.qry_start, h.qry_end, h.mapq, cigar, h.is_primary, h.mlen, h.blen, h.NM, h.trans_strand, h.seg_id, _cs, _MD)
-			cmappy.mm_free_reg1(&regs[i])
-		free(regs)
-		free(cs_str)
+		try:
+			i = 0
+			while i < n_regs:
+				cmappy.mm_reg2hitpy(self._idx, &regs[i], &h)
+				cigar, _cs, _MD = [], '', ''
+				for k in range(h.n_cigar32): # convert the 32-bit CIGAR encoding to Python array
+					c = h.cigar32[k]
+					cigar.append([c>>4, c&0xf])
+				if cs or MD: # generate the cs and/or the MD tag, if requested
+					if cs:
+						l_cs_str = cmappy.mm_gen_cs(km, &cs_str, &m_cs_str, self._idx, &regs[i], _seq, 1)
+						_cs = cs_str[:l_cs_str] if isinstance(cs_str, str) else cs_str[:l_cs_str].decode()
+					if MD:
+						l_cs_str = cmappy.mm_gen_MD(km, &cs_str, &m_cs_str, self._idx, &regs[i], _seq)
+						_MD = cs_str[:l_cs_str] if isinstance(cs_str, str) else cs_str[:l_cs_str].decode()
+				yield Alignment(h.ctg, h.ctg_len, h.ctg_start, h.ctg_end, h.strand, h.qry_start, h.qry_end, h.mapq, cigar, h.is_primary, h.mlen, h.blen, h.NM, h.trans_strand, h.seg_id, _cs, _MD)
+				cmappy.mm_free_reg1(&regs[i])
+				i += 1
+		finally:
+			while i < n_regs:
+				cmappy.mm_free_reg1(&regs[i])
+				i += 1
+			free(regs)
+			free(cs_str)
 
 	def seq(self, str name, int start=0, int end=0x7fffffff):
 		cdef int l
-		cdef char *s = cmappy.mappy_fetch_seq(self._idx, name.encode(), start, end, &l)
+		cdef char *s
+		if self._idx == NULL: return
+		s = cmappy.mappy_fetch_seq(self._idx, name.encode(), start, end, &l)
 		if l == 0: return None
 		r = s[:l] if isinstance(s, str) else s[:l].decode()
 		free(s)
@@ -220,6 +231,17 @@ cdef class Aligner:
 
 	@property
 	def n_seq(self): return self._idx.n_seq
+
+	@property
+	def seq_names(self):
+		cdef char *p
+		if self._idx == NULL: return
+		sn = []
+		for i in range(self._idx.n_seq):
+			p = self._idx.seq[i].name
+			s = p if isinstance(p, str) else p.decode()
+			sn.append(s)
+		return sn
 
 def fastx_read(fn, read_comment=False):
 	cdef cmappy.kseq_t *ks

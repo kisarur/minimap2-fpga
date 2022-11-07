@@ -12,6 +12,9 @@ extern double core_chaining_time_total;
 
 extern float SW_HW_THRESHOLD;
 
+// #define n_DEBUG 82982
+// #define i_DEBUG 34567
+
 static const char LogTable256[256] = {
 #define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
 	-1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -21,40 +24,37 @@ static const char LogTable256[256] = {
 
 static inline int ilog2_32(uint32_t v)
 {
-	register uint32_t t, tt;
+	uint32_t t, tt;
 	if ((tt = v>>16)) return (t = tt>>8) ? 24 + LogTable256[t] : 16 + LogTable256[tt];
 	return (t = v>>8) ? 8 + LogTable256[t] : LogTable256[v];
 }
 
-mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int min_cnt, int min_sc, int is_cdna, int n_segs, int64_t n, mm128_t *a, int *n_u_, uint64_t **_u, void *km, int tid)
+mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int max_iter, int min_cnt, int min_sc, float gap_scale, int is_cdna, int n_segs, int64_t n, mm128_t *a, int *n_u_, uint64_t **_u, void *km, int tid)
 { // TODO: make sure this works when n has more than 32 bits
 	int32_t k, *f, *p, *t, *v, n_u, n_v;
-	int64_t i, j, st;
+	int64_t i, j, st = 0;
 	uint64_t *u, *u2, sum_qspan = 0;
+	float avg_qspan_scaled;
 	mm128_t *b, *w;
 
 	if (_u) *_u = 0, *n_u_ = 0;
-	f = (int32_t*)kmalloc(km, (n + EXTRA_ELEMS) * 4);
-	p = (int32_t*)kmalloc(km, (n + EXTRA_ELEMS) * 4);
+	if (n == 0 || a == 0) {
+		kfree(km, a);
+		return 0;
+	}
+	f = (int32_t*)kmalloc(km, n * 4);
+	p = (int32_t*)kmalloc(km, n * 4);
 	t = (int32_t*)kmalloc(km, n * 4);
-	v = (int32_t*)kmalloc(km, (n + EXTRA_ELEMS) * 4);
+	v = (int32_t*)kmalloc(km, n * 4);
 	memset(t, 0, n * 4);
 
 	for (i = 0; i < n; ++i) sum_qspan += a[i].y>>32&0xff;
-	float avg_qspan_scaled = .01 * (float)sum_qspan / n;
-
-
-#ifdef MEASURE_CHAINING_TIME
-	double chaining_start = realtime();
-	bool was_exec_on_hw = false;
-#endif
-
+	avg_qspan_scaled = .01 * (float)sum_qspan / n;
 
 	/*--------- Calculating sw_hw_frac Start ------------*/
 	
 	long total_trip_count = 0;
 	st = 0;
-	bool is_hw_supported_call = true;
 	int64_t total_subparts = 0;
 	unsigned char * num_subparts = (unsigned char*)kmalloc(km, (n + EXTRA_ELEMS));
 
@@ -80,26 +80,14 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 		total_subparts += subparts;
 	}
 	
-	float sw_hw_frac = 0;
-	if (n > 0 && is_hw_supported_call) { // can have some other threshold than 0 for n (eg. MIN_ANCHORS) to force processing small calls on software
-		sw_hw_frac = (float) total_trip_count / (n * MAX_TRIPCOUNT);
-	}
-
+	float sw_hw_frac = (float) total_trip_count / (n * MAX_TRIPCOUNT);
+	
 	/*--------- Calculating sw_hw_frac End ------------*/
-
-#ifdef MEASURE_CHAINING_TIME
-	double overhead = realtime() - chaining_start;
-#endif
-
 
 #ifdef VERIFY_OUTPUT
 	int32_t * f_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
 	int32_t * p_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
 	int32_t * v_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
-#endif
-
-#ifdef MEASURE_CORE_CHAINING_TIME
-	double core_chaining_start = realtime();
 #endif
 
 
@@ -116,19 +104,20 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 				v[i] = max_j >= 0 && v[max_j] > max_f? v[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
 			}
 		} else {
+			// fill the score and backtrack arrays
 			st = 0;
 			for (i = 0; i < n; ++i) {
 				uint64_t ri = a[i].x;
 				int64_t max_j = -1;
 				int32_t qi = (int32_t)a[i].y, q_span = a[i].y>>32&0xff; // NB: only 8 bits of span is used!!!
-				int32_t max_f = q_span, min_d;
+				int32_t max_f = q_span, n_skip = 0, min_d;
 				int32_t sidi = (a[i].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
 				while (st < i && ri > a[st].x + max_dist_x) ++st;
-				for (j = i - 1; j >= st && j > (i - MAX_TRIPCOUNT - 1); --j) {
+				if (i - st > max_iter) st = i - max_iter;
+				for (j = i - 1; j >= st; --j) {
 					int64_t dr = ri - a[j].x;
-					int32_t dq = qi - (int32_t)a[j].y, dd, sc, log_dd;
+					int32_t dq = qi - (int32_t)a[j].y, dd, sc, log_dd, gap_cost;
 					int32_t sidj = (a[j].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
-
 					if ((sidi == sidj && dr == 0) || dq <= 0) continue; // don't skip if an anchor is used by multiple segments; see below
 					if ((sidi == sidj && dq > max_dist_y) || dq > max_dist_x) continue;
 					dd = dr > dq? dr - dq : dq - dr;
@@ -137,11 +126,31 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 					min_d = dq < dr? dq : dr;
 					sc = min_d > q_span? q_span : dq < dr? dq : dr;
 					log_dd = dd? ilog2_32(dd) : 0;
-					sc -= (int)(dd * avg_qspan_scaled) + (log_dd>>1);
+					gap_cost = 0;
+					if (is_cdna || sidi != sidj) {
+						int c_log, c_lin;
+						c_lin = (int)(dd * avg_qspan_scaled);
+						c_log = log_dd;
+						if (sidi != sidj && dr == 0) ++sc; // possibly due to overlapping paired ends; give a minor bonus
+						else if (dr > dq || sidi != sidj) gap_cost = c_lin < c_log? c_lin : c_log;
+						else gap_cost = c_lin + (c_log>>1);
+					} else gap_cost = (int)(dd * avg_qspan_scaled) + (log_dd>>1);
+					sc -= (int)((double)gap_cost * gap_scale + .499);
 					sc += f[j];
+#ifndef ENABLE_MAX_SKIP_ON_SW
 					if (sc > max_f) {
 						max_f = sc, max_j = j;
 					} 
+#else
+					if (sc > max_f) {
+						max_f = sc, max_j = j;
+						if (n_skip > 0) --n_skip;
+					} else if (t[j] == i) {
+						if (++n_skip > max_skip)
+							break;
+					}
+					if (p[j] >= 0) t[p[j]] = i;
+#endif
 				}
 				f[i] = max_f, p[i] = max_j;
 				v[i] = max_j >= 0 && v[max_j] > max_f? v[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
@@ -166,20 +175,24 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 			v_hw[i] = max_j >= 0 && v_hw[max_j] > max_f? v_hw[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
 		}
 #endif
-
+		// fill the score and backtrack arrays
 		st = 0;
 		for (i = 0; i < n; ++i) {
 			uint64_t ri = a[i].x;
 			int64_t max_j = -1;
 			int32_t qi = (int32_t)a[i].y, q_span = a[i].y>>32&0xff; // NB: only 8 bits of span is used!!!
-			int32_t max_f = q_span, min_d;
+			int32_t max_f = q_span, n_skip = 0, min_d;
 			int32_t sidi = (a[i].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
 			while (st < i && ri > a[st].x + max_dist_x) ++st;
+			if (i - st > max_iter) st = i - max_iter;
+#ifdef VERIFY_OUTPUT
 			for (j = i - 1; j >= st && j > (i - MAX_TRIPCOUNT - 1); --j) {
+#else
+			for (j = i - 1; j >= st; --j) {
+#endif
 				int64_t dr = ri - a[j].x;
-				int32_t dq = qi - (int32_t)a[j].y, dd, sc, log_dd;
+				int32_t dq = qi - (int32_t)a[j].y, dd, sc, log_dd, gap_cost;
 				int32_t sidj = (a[j].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
-
 				if ((sidi == sidj && dr == 0) || dq <= 0) continue; // don't skip if an anchor is used by multiple segments; see below
 				if ((sidi == sidj && dq > max_dist_y) || dq > max_dist_x) continue;
 				dd = dr > dq? dr - dq : dq - dr;
@@ -187,45 +200,57 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 				if (n_segs > 1 && !is_cdna && sidi == sidj && dr > max_dist_y) continue;
 				min_d = dq < dr? dq : dr;
 				sc = min_d > q_span? q_span : dq < dr? dq : dr;
+				// if (n == n_DEBUG && i == i_DEBUG) fprintf(stderr, "[sw-sc] %d\n", sc);
+
 				log_dd = dd? ilog2_32(dd) : 0;
-				sc -= (int)(dd * avg_qspan_scaled) + (log_dd>>1);
+				// if (n == n_DEBUG && i == i_DEBUG) fprintf(stderr, "[sw-log] %d\n", (log_dd>>1));
+
+				gap_cost = 0;
+				if (is_cdna || sidi != sidj) {
+					int c_log, c_lin;
+					c_lin = (int)(dd * avg_qspan_scaled);
+					c_log = log_dd;
+					if (sidi != sidj && dr == 0) ++sc; // possibly due to overlapping paired ends; give a minor bonus
+					else if (dr > dq || sidi != sidj) gap_cost = c_lin < c_log? c_lin : c_log;
+					else gap_cost = c_lin + (c_log>>1);
+				} else gap_cost = (int)(dd * avg_qspan_scaled) + (log_dd>>1);
+
+				// if (n == n_DEBUG && i == i_DEBUG) fprintf(stderr, "[sw-mul] %d\n", (int)(dd * avg_qspan_scaled));
+
+				sc -= (int)((double)gap_cost * gap_scale + .499);
+				// if (n == n_DEBUG && i == i_DEBUG) fprintf(stderr, "[sw-scsub] %d\n", sc);
+
 				sc += f[j];
+				// if (n == n_DEBUG && i == i_DEBUG) fprintf(stderr, "[sw-scadd] %d\n", sc);
+
+#ifndef ENABLE_MAX_SKIP_ON_SW
 				if (sc > max_f) {
 					max_f = sc, max_j = j;
 				} 
+#else
+				if (sc > max_f) {
+					max_f = sc, max_j = j;
+					if (n_skip > 0) --n_skip;
+				} else if (t[j] == i) {
+					if (++n_skip > max_skip)
+						break;
+				}
+				if (p[j] >= 0) t[p[j]] = i;
+#endif
 			}
 			f[i] = max_f, p[i] = max_j;
 			v[i] = max_j >= 0 && v[max_j] > max_f? v[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
 		}
 		
-		// fprintf(stderr, "tid: %d, chaining_time: %.3f\n", tid, (realtime() - sw_start) * 1000);
-		
 #ifndef VERIFY_OUTPUT
 	}
 #endif
-
-#ifdef MEASURE_CORE_CHAINING_TIME
-	double core_chaining_time = realtime() - core_chaining_start;
-	core_chaining_time_total += core_chaining_time;
-#endif
-
-#ifdef MEASURE_CHAINING_TIME
-	double overhead2_start = realtime();
-#endif
-
-#ifdef MEASURE_CHAINING_TIME
-	double end = realtime();
-	overhead += (end - overhead2_start);
-
-	fprintf(stderr, "tid: %d, chaining_time: %.3f, overhead: %.3f, sw_hw_frac: %.3f\n", tid, (end - chaining_start) * 1000, overhead * 1000, sw_hw_frac);
-#endif
-
 
 #ifdef VERIFY_OUTPUT
 	int mismatched = 0;
 	for (i = 0; i < n; i++) {
 		if (f[i] != f_hw[i] || p[i] != p_hw[i] || v[i] != v_hw[i]) {
-			fprintf(stderr, "n = %ld, i = %d | f = %d, f_hw = %d | p = %d, p_hw = %d | v = %d, v_hw = %d | %d, %d\n", n, i, f[i], f_hw[i], p[i], p_hw[i], v[i], v_hw[i], num_subparts[i], tc[i]);
+			fprintf(stderr, "n = %ld, total_subparts = %d, i = %d | f = %d, f_hw = %d | p = %d, p_hw = %d | v = %d, v_hw = %d | %d, %d\n", n, total_subparts, i, f[i], f_hw[i], p[i], p_hw[i], v[i], v_hw[i], num_subparts[i], tc[i]);
 			exit(1);
 			mismatched++;
 		}
@@ -314,8 +339,8 @@ kfree(km, num_subparts);
 		memcpy(&a[k], &b[w[i].y>>32], n * sizeof(mm128_t));
 		k += n;
 	}
-	memcpy(u, u2, n_u * 8);
-	memcpy(b, a, k * sizeof(mm128_t)); // write _a_ to _b_ and deallocate _a_ because _a_ is oversized, sometimes a lot
+	if (n_u) memcpy(u, u2, n_u * 8);
+	if (k) memcpy(b, a, k * sizeof(mm128_t)); // write _a_ to _b_ and deallocate _a_ because _a_ is oversized, sometimes a lot
 	kfree(km, a); kfree(km, w); kfree(km, u2);
 	return b;
 }

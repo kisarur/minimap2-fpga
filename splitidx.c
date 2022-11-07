@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include "mmpriv.h"
 
 FILE *mm_split_init(const char *prefix, const mm_idx_t *mi)
@@ -11,14 +12,17 @@ FILE *mm_split_init(const char *prefix, const mm_idx_t *mi)
 	uint32_t i, k = mi->k;
 	fn = (char*)calloc(strlen(prefix) + 10, 1);
 	sprintf(fn, "%s.%.4d.tmp", prefix, mi->index);
-	fp = fopen(fn, "wb");
-	assert(fp);
+	if ((fp = fopen(fn, "wb")) == NULL) {
+		if (mm_verbose >= 1)
+			fprintf(stderr, "[ERROR]\033[1;31m failed to write to temporary file '%s'\033[0m: %s\n", fn, strerror(errno));
+		exit(1);
+	}
 	mm_err_fwrite(&k, 4, 1, fp);
 	mm_err_fwrite(&mi->n_seq, 4, 1, fp);
 	for (i = 0; i < mi->n_seq; ++i) {
-		uint8_t l;
+		uint32_t l;
 		l = strlen(mi->seq[i].name);
-		mm_err_fwrite(&l, 1, 1, fp);
+		mm_err_fwrite(&l, 1, 4, fp);
 		mm_err_fwrite(mi->seq[i].name, 1, l, fp);
 		mm_err_fwrite(&mi->seq[i].len, 4, 1, fp);
 	}
@@ -38,7 +42,7 @@ mm_idx_t *mm_split_merge_prep(const char *prefix, int n_splits, FILE **fp, uint3
 		sprintf(fn, "%s.%.4d.tmp", prefix, i);
 		if ((fp[i] = fopen(fn, "rb")) == 0) {
 			if (mm_verbose >= 1)
-				fprintf(stderr, "ERROR: failed to open temporary file '%s'\n", fn);
+				fprintf(stderr, "ERROR: failed to open temporary file '%s': %s\n", fn, strerror(errno));
 			for (j = 0; j < i; ++j)
 				fclose(fp[j]);
 			free(fn);
@@ -57,8 +61,8 @@ mm_idx_t *mm_split_merge_prep(const char *prefix, int n_splits, FILE **fp, uint3
 	for (i = j = 0; i < n_splits; ++i) {
 		uint32_t k;
 		for (k = 0; k < n_seq_part[i]; ++k, ++j) {
-			uint8_t l;
-			mm_err_fread(&l, 1, 1, fp[i]);
+			uint32_t l;
+			mm_err_fread(&l, 1, 4, fp[i]);
 			mi->seq[j].name = (char*)calloc(l + 1, 1);
 			mm_err_fread(mi->seq[j].name, 1, l, fp[i]);
 			mm_err_fread(&mi->seq[j].len, 4, 1, fp[i]);

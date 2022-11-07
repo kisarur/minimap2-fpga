@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include "bseq.h"
 #include "minimap.h"
 #include "mmpriv.h"
@@ -15,7 +16,7 @@
 const char* SW_HW_THRESHOLD_ENV = getenv("SW_HW_THRESHOLD");
 float SW_HW_THRESHOLD = (SW_HW_THRESHOLD_ENV != NULL) ? atof(SW_HW_THRESHOLD_ENV) : 0.2;
 
-#define MM_VERSION "2.13-r850"
+#define MM_VERSION "2.18-r1015"
 
 #ifdef __linux__
 #include <sys/resource.h>
@@ -69,6 +70,16 @@ static ko_longopt_t long_options[] = {
 	{ (char *)"split-prefix",   ko_required_argument, 334 },
 	{ (char *)"no-end-flt",     ko_no_argument,       335 },
 	{ (char *)"hard-mask-level",ko_no_argument,       336 },
+	{ (char *)"cap-sw-mem",     ko_required_argument, 337 },
+	{ (char *)"max-qlen",       ko_required_argument, 338 },
+	{ (char *)"max-chain-iter", ko_required_argument, 339 },
+	{ (char *)"junc-bed",       ko_required_argument, 340 },
+	{ (char *)"junc-bonus",     ko_required_argument, 341 },
+	{ (char *)"sam-hit-only",   ko_no_argument,       342 },
+	{ (char *)"chain-gap-scale",ko_required_argument, 343 },
+	{ (char *)"alt",            ko_required_argument, 344 },
+	{ (char *)"alt-drop",       ko_required_argument, 345 },
+	{ (char *)"mask-len",       ko_required_argument, 346 },
 	{ (char *)"help",           ko_no_argument,       'h' },
 	{ (char *)"max-intron-len", ko_required_argument, 'G' },
 	{ (char *)"version",        ko_no_argument,       'V' },
@@ -106,19 +117,14 @@ static inline void yes_or_no(mm_mapopt_t *opt, int flag, int long_idx, const cha
 
 int main(int argc, char *argv[])
 {
-
-#ifdef MEASURE_CORE_CHAINING_TIME
-	core_chaining_time_total = 0;
-#endif
-
 	fprintf(stderr, "[INFO] SW_HW_THRESHOLD is set to %f\n", SW_HW_THRESHOLD);
 
-	const char *opt_str = "2aSDw:k:K:t:r:f:Vv:g:G:I:d:XT:s:x:Hcp:M:n:z:A:B:O:E:m:N:Qu:R:hF:LC:yYP";
+	const char *opt_str = "2aSDw:k:K:t:r:f:Vv:g:G:I:d:XT:s:x:Hcp:M:n:z:A:B:O:E:m:N:Qu:R:hF:LC:yYPo:";
 	ketopt_t o = KETOPT_INIT;
 	mm_mapopt_t opt;
 	mm_idxopt_t ipt;
 	int i, c, n_threads = 3, n_parts, old_best_n = -1;
-	char *fnw = 0, *rg = 0, *s;
+	char *fnw = 0, *rg = 0, *junc_bed = 0, *s, *alt_list = 0;
 	FILE *fp_help = stderr;
 	mm_idx_reader_t *idx_rdr;
 	mm_idx_t *mi;
@@ -138,7 +144,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "[ERROR] missing option argument\n");
 			return 1;
 		} else if (c == '?') {
-			fprintf(stderr, "[ERROR] unknown option in \"%s\"\n", argv[o.i]);
+			fprintf(stderr, "[ERROR] unknown option in \"%s\"\n", argv[o.i - 1]);
 			return 1;
 		}
 	}
@@ -175,16 +181,25 @@ int main(int argc, char *argv[])
 		else if (c == 's') opt.min_dp_max = atoi(o.arg);
 		else if (c == 'C') opt.noncan = atoi(o.arg);
 		else if (c == 'I') ipt.batch_size = mm_parse_num(o.arg);
-		else if (c == 'K') opt.mini_batch_size = (int)mm_parse_num(o.arg);
+		else if (c == 'K') opt.mini_batch_size = mm_parse_num(o.arg);
 		else if (c == 'R') rg = o.arg;
 		else if (c == 'h') fp_help = stdout;
 		else if (c == '2') opt.flag |= MM_F_2_IO_THREADS;
+		else if (c == 'o') {
+			if (strcmp(o.arg, "-") != 0) {
+				if (freopen(o.arg, "wb", stdout) == NULL) {
+					fprintf(stderr, "[ERROR]\033[1;31m failed to write the output to file '%s'\033[0m: %s\n", o.arg, strerror(errno));
+					exit(1);
+				}
+			}
+		}
 		else if (c == 300) ipt.bucket_bits = atoi(o.arg); // --bucket-bits
 		else if (c == 302) opt.seed = atoi(o.arg); // --seed
 		else if (c == 303) mm_dbg_flag |= MM_DBG_NO_KALLOC; // --no-kalloc
 		else if (c == 304) mm_dbg_flag |= MM_DBG_PRINT_QNAME; // --print-qname
 		else if (c == 306) mm_dbg_flag |= MM_DBG_PRINT_QNAME | MM_DBG_PRINT_SEED, n_threads = 1; // --print-seed
 		else if (c == 307) opt.max_chain_skip = atoi(o.arg); // --max-chain-skip
+		else if (c == 339) opt.max_chain_iter = atoi(o.arg); // --max-chain-iter
 		else if (c == 308) opt.min_ksw_len = atoi(o.arg); // --min-dp-len
 		else if (c == 309) mm_dbg_flag |= MM_DBG_PRINT_QNAME | MM_DBG_PRINT_ALN_SEQ, n_threads = 1; // --print-aln-seq
 		else if (c == 310) opt.flag |= MM_F_SPLICE; // --splice
@@ -206,6 +221,15 @@ int main(int argc, char *argv[])
 		else if (c == 334) opt.split_prefix = o.arg; // --split-prefix
 		else if (c == 335) opt.flag |= MM_F_NO_END_FLT; // --no-end-flt
 		else if (c == 336) opt.flag |= MM_F_HARD_MLEVEL; // --hard-mask-level
+		else if (c == 337) opt.max_sw_mat = mm_parse_num(o.arg); // --cap-sw-mat
+		else if (c == 338) opt.max_qlen = mm_parse_num(o.arg); // --max-qlen
+		else if (c == 340) junc_bed = o.arg; // --junc-bed
+		else if (c == 341) opt.junc_bonus = atoi(o.arg); // --junc-bonus
+		else if (c == 342) opt.flag |= MM_F_SAM_HIT_ONLY; // --sam-hit-only
+		else if (c == 343) opt.chain_gap_scale = atof(o.arg); // --chain-gap-scale
+		else if (c == 344) alt_list = o.arg; // --alt
+		else if (c == 345) opt.alt_drop = atof(o.arg); // --alt-drop
+		else if (c == 346) opt.mask_len = mm_parse_num(o.arg); // --mask-len
 		else if (c == 314) { // --frag
 			yes_or_no(&opt, MM_F_FRAG_MODE, o.longidx, o.arg, 1);
 		} else if (c == 315) { // --secondary
@@ -280,7 +304,7 @@ int main(int argc, char *argv[])
 		fprintf(fp_help, "  Indexing:\n");
 		fprintf(fp_help, "    -H           use homopolymer-compressed k-mer (preferrable for PacBio)\n");
 		fprintf(fp_help, "    -k INT       k-mer size (no larger than 28) [%d]\n", ipt.k);
-		fprintf(fp_help, "    -w INT       minizer window size [%d]\n", ipt.w);
+		fprintf(fp_help, "    -w INT       minimizer window size [%d]\n", ipt.w);
 		fprintf(fp_help, "    -I NUM       split index for every ~NUM input bases [4G]\n");
 		fprintf(fp_help, "    -d FILE      dump index to FILE []\n");
 		fprintf(fp_help, "  Mapping:\n");
@@ -305,7 +329,7 @@ int main(int argc, char *argv[])
 		fprintf(fp_help, "    -u CHAR      how to find GT-AG. f:transcript strand, b:both strands, n:don't match GT-AG [n]\n");
 		fprintf(fp_help, "  Input/Output:\n");
 		fprintf(fp_help, "    -a           output in the SAM format (PAF by default)\n");
-		fprintf(fp_help, "    -Q           don't output base quality in SAM\n");
+		fprintf(fp_help, "    -o FILE      output alignments to FILE [stdout]\n");
 		fprintf(fp_help, "    -L           write CIGAR with >65535 ops at the CG tag\n");
 		fprintf(fp_help, "    -R STR       SAM read group line in a format like '@RG\\tID:foo\\tSM:bar' []\n");
 		fprintf(fp_help, "    -c           output CIGAR in PAF\n");
@@ -319,11 +343,11 @@ int main(int argc, char *argv[])
 		fprintf(fp_help, "    --version    show version number\n");
 		fprintf(fp_help, "  Preset:\n");
 		fprintf(fp_help, "    -x STR       preset (always applied before other options; see minimap2.1 for details) []\n");
-		fprintf(fp_help, "                 - map-pb/map-ont: PacBio/Nanopore vs reference mapping\n");
-		fprintf(fp_help, "                 - ava-pb/ava-ont: PacBio/Nanopore read overlap\n");
-		fprintf(fp_help, "                 - asm5/asm10/asm20: asm-to-ref mapping, for ~0.1/1/5%% sequence divergence\n");
-		fprintf(fp_help, "                 - splice: long-read spliced alignment\n");
-		fprintf(fp_help, "                 - sr: genomic short-read mapping\n");
+		fprintf(fp_help, "                 - map-pb/map-ont - PacBio/Nanopore vs reference mapping\n");
+		fprintf(fp_help, "                 - ava-pb/ava-ont - PacBio/Nanopore read overlap\n");
+		fprintf(fp_help, "                 - asm5/asm10/asm20 - asm-to-ref mapping, for ~0.1/1/5%% sequence divergence\n");
+		fprintf(fp_help, "                 - splice/splice:hq - long-read/Pacbio-CCS spliced alignment\n");
+		fprintf(fp_help, "                 - sr - genomic short-read mapping\n");
 		fprintf(fp_help, "\nSee `man ./minimap2.1' for detailed description of these and other advanced command-line options.\n");
 		return fp_help == stdout? 0 : 1;
 	}
@@ -334,7 +358,7 @@ int main(int argc, char *argv[])
 	}
 	idx_rdr = mm_idx_reader_open(argv[o.ind], &ipt, fnw);
 	if (idx_rdr == 0) {
-		fprintf(stderr, "[ERROR] failed to open file '%s'\n", argv[o.ind]);
+		fprintf(stderr, "[ERROR] failed to open file '%s': %s\n", argv[o.ind], strerror(errno));
 		return 1;
 	}
 	if (!idx_rdr->is_idx && fnw == 0 && argc - o.ind < 2) {
@@ -345,24 +369,13 @@ int main(int argc, char *argv[])
 	if (opt.best_n == 0 && (opt.flag&MM_F_CIGAR) && mm_verbose >= 2)
 		fprintf(stderr, "[WARNING]\033[1;31m `-N 0' reduces alignment accuracy. Please use --secondary=no to suppress secondary alignments.\033[0m\n");
 	
-#ifndef MIMIC_HW	
-
-#ifdef MEASURE_CHAINING_TIME
-	double hardware_init_start = realtime();
-#endif
-
 	// initialize OpenCL FPGA stuff (input/output buffers, kernels, command queues, etc)
-    if (!hardware_init(BUFFER_N)) {
+	if (!hardware_init(BUFFER_N)) {
         return -1;
     }
-
-#ifdef MEASURE_CHAINING_TIME
-	fprintf(stderr, "hardware_init_time: %.3f\n", (realtime() - hardware_init_start) * 1000);
-#endif
-
-#endif
 	
 	while ((mi = mm_idx_reader_read(idx_rdr, n_threads)) != 0) {
+		int ret;
 		if ((opt.flag & MM_F_CIGAR) && (mi->flag & MM_I_NO_SEQ)) {
 			fprintf(stderr, "[ERROR] the prebuilt index doesn't contain sequences.\n");
 			mm_idx_destroy(mi);
@@ -371,11 +384,19 @@ int main(int argc, char *argv[])
 		}
 		if ((opt.flag & MM_F_OUT_SAM) && idx_rdr->n_parts == 1) {
 			if (mm_idx_reader_eof(idx_rdr)) {
-				mm_write_sam_hdr(mi, rg, MM_VERSION, argc, argv);
+				if (opt.split_prefix == 0)
+					ret = mm_write_sam_hdr(mi, rg, MM_VERSION, argc, argv);
+				else
+					ret = mm_write_sam_hdr(0, rg, MM_VERSION, argc, argv);
 			} else {
-				mm_write_sam_hdr(0, rg, MM_VERSION, argc, argv);
+				ret = mm_write_sam_hdr(0, rg, MM_VERSION, argc, argv);
 				if (opt.split_prefix == 0 && mm_verbose >= 2)
 					fprintf(stderr, "[WARNING]\033[1;31m For a multi-part index, no @SQ lines will be outputted. Please use --split-prefix.\033[0m\n");
+			}
+			if (ret != 0) {
+				mm_idx_destroy(mi);
+				mm_idx_reader_close(idx_rdr);
+				return 1;
 			}
 		}
 		if (mm_verbose >= 3)
@@ -383,13 +404,22 @@ int main(int argc, char *argv[])
 					__func__, realtime() - mm_realtime0, cputime() / (realtime() - mm_realtime0), mi->n_seq);
 		if (argc != o.ind + 1) mm_mapopt_update(&opt, mi);
 		if (mm_verbose >= 3) mm_idx_stat(mi);
+		if (junc_bed) mm_idx_bed_read(mi, junc_bed, 1);
+		if (alt_list) mm_idx_alt_read(mi, alt_list);
+		ret = 0;
 		if (!(opt.flag & MM_F_FRAG_MODE)) {
-			for (i = o.ind + 1; i < argc; ++i)
-				mm_map_file(mi, argv[i], &opt, n_threads);
+			for (i = o.ind + 1; i < argc; ++i) {
+				ret = mm_map_file(mi, argv[i], &opt, n_threads);
+				if (ret < 0) break;
+			}
 		} else {
-			mm_map_file_frag(mi, argc - (o.ind + 1), (const char**)&argv[o.ind + 1], &opt, n_threads);
+			ret = mm_map_file_frag(mi, argc - (o.ind + 1), (const char**)&argv[o.ind + 1], &opt, n_threads);
 		}
 		mm_idx_destroy(mi);
+		if (ret < 0) {
+			fprintf(stderr, "ERROR: failed to map the query file\n");
+			exit(EXIT_FAILURE);
+		}
 	}
 	n_parts = idx_rdr->n_parts;
 	mm_idx_reader_close(idx_rdr);
@@ -398,9 +428,12 @@ int main(int argc, char *argv[])
 		mm_split_merge(argc - (o.ind + 1), (const char**)&argv[o.ind + 1], &opt, n_parts);
 
 	if (fflush(stdout) == EOF) {
-		fprintf(stderr, "[ERROR] failed to write the results\n");
+		perror("[ERROR] failed to write the results");
 		exit(EXIT_FAILURE);
 	}
+
+	// free the FPGA resources allocated
+    cleanup();
 
 	if (mm_verbose >= 3) {
 		fprintf(stderr, "[M::%s] Version: %s\n", __func__, MM_VERSION);
@@ -408,27 +441,8 @@ int main(int argc, char *argv[])
 		for (i = 0; i < argc; ++i)
 			fprintf(stderr, " %s", argv[i]);
 		fprintf(stderr, "\n[M::%s] Real time: %.3f sec; CPU: %.3f sec; Peak RSS: %.3f GB\n", __func__, realtime() - mm_realtime0, cputime(), peakrss() / 1024.0 / 1024.0 / 1024.0);
-
-#ifdef MEASURE_CORE_CHAINING_TIME
-		fprintf(stderr, "Total chaining time: %.3f sec\n", core_chaining_time_total);
-#endif
-
 	}
 
-#ifndef MIMIC_HW
-
-#ifdef MEASURE_CHAINING_TIME
-	double hardware_cleanup_start = realtime();
-#endif
-
-	// free the FPGA resources allocated
-    cleanup();
-
-#ifdef MEASURE_CHAINING_TIME
-	fprintf(stderr, "hardware_cleanup_time: %.3f\n", (realtime() - hardware_cleanup_start) * 1000);
-#endif
-
-#endif
-
+	
 	return 0;
 }

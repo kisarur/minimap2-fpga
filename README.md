@@ -9,8 +9,8 @@ cd minimap2 && make
 # long sequences against a reference genome
 ./minimap2 -a test/MT-human.fa test/MT-orang.fa > test.sam
 # create an index first and then map
-./minimap2 -d MT-human.mmi test/MT-human.fa
-./minimap2 -a MT-human.mmi test/MT-orang.fa > test.sam
+./minimap2 -x map-ont -d MT-human-ont.mmi test/MT-human.fa
+./minimap2 -a MT-human-ont.mmi test/MT-orang.fa > test.sam
 # use presets (no test data)
 ./minimap2 -ax map-pb ref.fa pacbio.fq.gz > aln.sam       # PacBio genomic reads
 ./minimap2 -ax map-ont ref.fa ont.fq.gz > aln.sam         # Oxford Nanopore genomic reads
@@ -18,13 +18,18 @@ cd minimap2 && make
 ./minimap2 -ax sr ref.fa read1.fa read2.fa > aln.sam      # short genomic paired-end reads
 ./minimap2 -ax splice ref.fa rna-reads.fa > aln.sam       # spliced long reads (strand unknown)
 ./minimap2 -ax splice -uf -k14 ref.fa reads.fa > aln.sam  # noisy Nanopore Direct RNA-seq
-./minimap2 -ax splice -uf -C5 ref.fa query.fa > aln.sam   # Final PacBio Iso-seq or traditional cDNA
+./minimap2 -ax splice:hq -uf ref.fa query.fa > aln.sam    # Final PacBio Iso-seq or traditional cDNA
+./minimap2 -ax splice --junc-bed anno.bed12 ref.fa query.fa > aln.sam  # prioritize on annotated junctions
 ./minimap2 -cx asm5 asm1.fa asm2.fa > aln.paf             # intra-species asm-to-asm alignment
 ./minimap2 -x ava-pb reads.fa reads.fa > overlaps.paf     # PacBio read overlap
 ./minimap2 -x ava-ont reads.fa reads.fa > overlaps.paf    # Nanopore read overlap
 # man page for detailed command line options
 man ./minimap2.1
 ```
+[Unimap][unimap] is recommended for aligning long contigs against a reference
+genome. It often takes less wall-clock time and is much more sensitive to long
+insertions and deletions.
+
 ## Table of Contents
 
 - [Getting Started](#started)
@@ -71,8 +76,8 @@ Detailed evaluations are available from the [minimap2 paper][doi] or the
 Minimap2 is optimized for x86-64 CPUs. You can acquire precompiled binaries from
 the [release page][release] with:
 ```sh
-curl -L https://github.com/lh3/minimap2/releases/download/v2.13/minimap2-2.13_x64-linux.tar.bz2 | tar -jxvf -
-./minimap2-2.13_x64-linux/minimap2
+curl -L https://github.com/lh3/minimap2/releases/download/v2.18/minimap2-2.18_x64-linux.tar.bz2 | tar -jxvf -
+./minimap2-2.18_x64-linux/minimap2
 ```
 If you want to compile from the source, you need to have a C compiler, GNU make
 and zlib development files installed. Then type `make` in the source code
@@ -80,7 +85,14 @@ directory to compile. If you see compilation errors, try `make sse2only=1`
 to disable SSE4 code, which will make minimap2 slightly slower.
 
 Minimap2 also works with ARM CPUs supporting the NEON instruction sets. To
-compile for 32 bit ARM architectures (such as ARMv7), use `make arm_neon=1`. To compile for for 64 bit ARM architectures (such as ARMv8), use `make arm_neon=1 aarch64=1`.
+compile for 32 bit ARM architectures (such as ARMv7), use `make arm_neon=1`. To
+compile for for 64 bit ARM architectures (such as ARMv8), use `make arm_neon=1
+aarch64=1`.
+
+Minimap2 can use [SIMD Everywhere (SIMDe)][simde] library for porting
+implementation to the different SIMD instruction sets. To compile using SIMDe,
+use `make -f Makefile.simde`. To compile for ARM CPUs, use `Makefile.simde`
+with the ARM related command lines given above.
 
 ### <a name="general"></a>General usage
 
@@ -139,7 +151,7 @@ Nanopore reads.
 #### <a name="map-long-splice"></a>Map long mRNA/cDNA reads
 
 ```sh
-minimap2 -ax splice -uf -C5 ref.fa iso-seq.fq > aln.sam      # PacBio Iso-seq/traditional cDNA
+minimap2 -ax splice:hq -uf ref.fa iso-seq.fq > aln.sam       # PacBio Iso-seq/traditional cDNA
 minimap2 -ax splice ref.fa nanopore-cdna.fa > aln.sam        # Nanopore 2D cDNA-seq
 minimap2 -ax splice -uf -k14 ref.fa direct-rna.fq > aln.sam  # Nanopore Direct RNA-seq
 minimap2 -ax splice --splice-flank=no SIRV.fa SIRV-seq.fa    # mapping against SIRV control
@@ -177,6 +189,19 @@ reduces the accuracy when aligning against the widely used SIRV control data.
 This is because SIRV does not honor the evolutionarily conservative splicing
 signal. If you are studying SIRV, you may apply `--splice-flank=no` to let
 minimap2 only model GT..AG, ignoring the additional base.
+
+Since v2.17, minimap2 can optionally take annotated genes as input and
+prioritize on annotated splice junctions. To use this feature, you can 
+```sh
+paftools.js gff2bed anno.gff > anno.bed
+minimap2 -ax splice --junc-bed anno.bed ref.fa query.fa > aln.sam
+```
+Here, `anno.gff` is the gene annotation in the GTF or GFF3 format (`gff2bed`
+automatically tests the format). The output of `gff2bed` is in the 12-column
+BED format, or the BED12 format. With the `--junc-bed` option, minimap2 adds a
+bonus score (tuned by `--junc-bonus`) if an aligned junction matches a junction
+in the annotation. Option `--junc-bed` also takes 5-column BED, including the
+strand field. In this case, each line indicates an oriented junction.
 
 #### <a name="long-overlap"></a>Find overlaps between long reads
 
@@ -315,16 +340,17 @@ highlighted in bold. The description may help to tune minimap2 parameters.
 ### <a name="help"></a>Getting help
 
 Manpage [minimap2.1][manpage] provides detailed description of minimap2
-command line options and optional tags. If you encounter bugs or have further
-questions or requests, you can raise an issue at the [issue page][issue].
-There is not a specific mailing list for the time being.
+command line options and optional tags. The [FAQ](FAQ.md) page answers several
+frequently asked questions. If you encounter bugs or have further questions or
+requests, you can raise an issue at the [issue page][issue].  There is not a
+specific mailing list for the time being.
 
 ### <a name="cite"></a>Citing minimap2
 
 If you use minimap2 in your work, please cite:
 
 > Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences.
-> Bioinformatics. [doi:10.1093/bioinformatics/bty191][doi]
+> *Bioinformatics*, **34**:3094-3100. [doi:10.1093/bioinformatics/bty191][doi]
 
 ## <a name="dguide"></a>Developers' Guide
 
@@ -355,6 +381,8 @@ mappy` or [from BioConda][mappyconda] via `conda install -c bioconda mappy`.
   billion bases or longer (2,147,483,647 to be exact). The total length of all
   sequences can well exceed this threshold.
 
+* Minimap2 often misses small exons.
+
 
 
 [paf]: https://github.com/lh3/miniasm/blob/master/PAF.md
@@ -373,3 +401,5 @@ mappy` or [from BioConda][mappyconda] via `conda install -c bioconda mappy`.
 [manpage]: https://lh3.github.io/minimap2/minimap2.html
 [manpage-cs]: https://lh3.github.io/minimap2/minimap2.html#10
 [doi]: https://doi.org/10.1093/bioinformatics/bty191
+[smide]: https://github.com/nemequ/simde
+[unimap]: https://github.com/lh3/unimap

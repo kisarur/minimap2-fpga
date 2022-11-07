@@ -6,28 +6,33 @@ cdef extern from "minimap.h":
 	#
 	ctypedef struct mm_idxopt_t:
 		short k, w, flag, bucket_bits
-		int mini_batch_size
+		int64_t mini_batch_size
 		uint64_t batch_size
 
 	ctypedef struct mm_mapopt_t:
+		int64_t flag
 		int seed
 		int sdust_thres
-		int flag
+		int max_qlen
 		int bw
 		int max_gap, max_gap_ref
 		int max_frag_len
-		int max_chain_skip
+		int max_chain_skip, max_chain_iter
 		int min_cnt
 		int min_chain_score
+		float chain_gap_scale
 		float mask_level
+		int mask_len
 		float pri_ratio
 		int best_n
 		int max_join_long, max_join_short
 		int min_join_flank_sc
-		float min_join_flank_ratio;
+		float min_join_flank_ratio
+		float alt_drop
 		int a, b, q, e, q2, e2
 		int sc_ambi
 		int noncan
+		int junc_bonus
 		int zdrop, zdrop_inv
 		int end_bonus
 		int min_dp_max
@@ -39,7 +44,8 @@ cdef extern from "minimap.h":
 		int32_t min_mid_occ
 		int32_t mid_occ
 		int32_t max_occ
-		int mini_batch_size
+		int64_t mini_batch_size
+		int64_t max_sw_mat
 		const char *split_prefix
 
 	int mm_set_opt(char *preset, mm_idxopt_t *io, mm_mapopt_t *mo)

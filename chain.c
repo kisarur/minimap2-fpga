@@ -80,7 +80,22 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 		total_subparts += subparts;
 	}
 	
-	float sw_hw_frac = (float) total_trip_count / (n * MAX_TRIPCOUNT);
+	// float sw_hw_frac = (float) total_trip_count / (n * MAX_TRIPCOUNT);
+
+	// static float K1_HW = 0.00000827925918229442;	
+	// static float K2_HW = 0.0000422016968689315;
+	// static float C_HW = 0.593588229405883;
+	// static float K_SW = 0.00000592168004983166;
+	// static float C_SW = 1.7872583080735;
+
+	static float K1_HW = 8.429346604594088e-06;	
+	static float K2_HW = 4.219985490696127e-05;
+	static float C_HW = 0.6198209995910657;
+	static float K_SW = 5.237303730088228e-06;
+	static float C_SW = -0.9308447100947506;
+
+	float hw_time_pred = K1_HW * n + K2_HW * total_subparts + C_HW;
+	float sw_time_pred = K_SW * total_trip_count + C_SW;
 	
 	/*--------- Calculating sw_hw_frac End ------------*/
 
@@ -92,7 +107,10 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 
 
 #ifndef VERIFY_OUTPUT
-	if (sw_hw_frac > SW_HW_THRESHOLD) { // execute on HW
+	// if (sw_hw_frac > SW_HW_THRESHOLD) { // execute on HW
+	if (hw_time_pred < sw_time_pred) { // execute on HW
+	// if (hw_time_pred < SW_HW_THRESHOLD * sw_time_pred) { // execute on HW
+
 
 		int hw_chain = run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f, p, num_subparts, total_subparts, tid);
 

@@ -10,11 +10,6 @@
 extern double core_chaining_time_total;
 #endif
 
-extern float SW_HW_THRESHOLD;
-
-// #define n_DEBUG 82982
-// #define i_DEBUG 34567
-
 static const char LogTable256[256] = {
 #define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
 	-1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -51,7 +46,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	for (i = 0; i < n; ++i) sum_qspan += a[i].y>>32&0xff;
 	avg_qspan_scaled = .01 * (float)sum_qspan / n;
 
-	/*--------- Calculating sw_hw_frac Start ------------*/
+	/*--------- HW/SW time prediction Start ------------*/
 	
 	long total_trip_count = 0;
 	st = 0;
@@ -79,25 +74,11 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 		num_subparts[i] = (unsigned char)subparts;
 		total_subparts += subparts;
 	}
-	
-	// float sw_hw_frac = (float) total_trip_count / (n * MAX_TRIPCOUNT);
-
-	// static float K1_HW = 0.00000827925918229442;	
-	// static float K2_HW = 0.0000422016968689315;
-	// static float C_HW = 0.593588229405883;
-	// static float K_SW = 0.00000592168004983166;
-	// static float C_SW = 1.7872583080735;
-
-	static float K1_HW = 8.429346604594088e-06;	
-	static float K2_HW = 4.219985490696127e-05;
-	static float C_HW = 0.6198209995910657;
-	static float K_SW = 5.237303730088228e-06;
-	static float C_SW = -0.9308447100947506;
 
 	float hw_time_pred = K1_HW * n + K2_HW * total_subparts + C_HW;
 	float sw_time_pred = K_SW * total_trip_count + C_SW;
 	
-	/*--------- Calculating sw_hw_frac End ------------*/
+	/*--------- HW/SW time prediction End ------------*/
 
 #ifdef VERIFY_OUTPUT
 	int32_t * f_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
@@ -107,12 +88,9 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 
 
 #ifndef VERIFY_OUTPUT
-	// if (sw_hw_frac > SW_HW_THRESHOLD) { // execute on HW
 	if (hw_time_pred < sw_time_pred) { // execute on HW
-	// if (hw_time_pred < SW_HW_THRESHOLD * sw_time_pred) { // execute on HW
 
-
-		int hw_chain = run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f, p, num_subparts, total_subparts, tid);
+		int hw_chain = run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f, p, num_subparts, total_subparts, tid, hw_time_pred, sw_time_pred);
 
 #ifdef PROCESS_ON_SW_IF_HW_BUSY
 		if (hw_chain == 0) {
@@ -185,7 +163,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	} else { // execute on SW
 
 #else 
-		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f_hw, p_hw, num_subparts, total_subparts, tid);
+		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f_hw, p_hw, num_subparts, total_subparts, tid, hw_time_pred, sw_time_pred);
 
 		for (i = 0; i < n; ++i) {
 			int32_t max_f = f_hw[i];
@@ -218,11 +196,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 				if (n_segs > 1 && !is_cdna && sidi == sidj && dr > max_dist_y) continue;
 				min_d = dq < dr? dq : dr;
 				sc = min_d > q_span? q_span : dq < dr? dq : dr;
-				// if (n == n_DEBUG && i == i_DEBUG) fprintf(stderr, "[sw-sc] %d\n", sc);
-
 				log_dd = dd? ilog2_32(dd) : 0;
-				// if (n == n_DEBUG && i == i_DEBUG) fprintf(stderr, "[sw-log] %d\n", (log_dd>>1));
-
 				gap_cost = 0;
 				if (is_cdna || sidi != sidj) {
 					int c_log, c_lin;
@@ -232,16 +206,9 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 					else if (dr > dq || sidi != sidj) gap_cost = c_lin < c_log? c_lin : c_log;
 					else gap_cost = c_lin + (c_log>>1);
 				} else gap_cost = (int)(dd * avg_qspan_scaled) + (log_dd>>1);
-
-				// if (n == n_DEBUG && i == i_DEBUG) fprintf(stderr, "[sw-mul] %d\n", (int)(dd * avg_qspan_scaled));
-
 				sc -= (int)((double)gap_cost * gap_scale + .499);
-				// if (n == n_DEBUG && i == i_DEBUG) fprintf(stderr, "[sw-scsub] %d\n", sc);
-
 				sc += f[j];
-				// if (n == n_DEBUG && i == i_DEBUG) fprintf(stderr, "[sw-scadd] %d\n", sc);
-
-#ifndef ENABLE_MAX_SKIP_ON_SW
+#if !defined(ENABLE_MAX_SKIP_ON_SW) || defined(VERIFY_OUTPUT)
 				if (sc > max_f) {
 					max_f = sc, max_j = j;
 				} 

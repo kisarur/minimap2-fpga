@@ -16,6 +16,12 @@
 
 #include "minimap.h"
 
+#define K1_HW 8.429346604594088e-06
+#define K2_HW 4.219985490696127e-05
+#define C_HW 0.6198209995910657
+#define K_SW 5.237303730088228e-06
+#define C_SW -0.9308447100947506
+
 // #define DEBUG_HW          // chain_hardware.cpp (to print out steps in hardware processing)
 // #define VERIFY_OUTPUT       // chain.c (to run both on software and hardware and cross-check the outputs)
 
@@ -30,7 +36,7 @@
 #define EXTRA_ELEMS 0 // added to temporarily fix the issue with parallel execution of OpenCL hardware kernels 
                         // (i.e. all input/output arrays used in hardware chaining are filled with EXTRA_ELEMS no. of elements)
 
-#define PROCESS_ON_SW_IF_HW_BUSY // controls whether to process chaining tasks (chosen for hardware) on software if hardware is busy
+#define PROCESS_ON_SW_IF_HW_BUSY // controls whether to process chaining tasks (chosen for hardware) on software if it's more suitable to do so
 
 #define ENABLE_MAX_SKIP_ON_SW // enables max_skip heuristic for chaining on software
 
@@ -51,7 +57,7 @@ using namespace std;
 #define STRING_BUFFER_LEN 1024
 
 int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_int q_span, cl_float avg_qspan,
-                mm128_t * a, cl_int* f, cl_int* p, cl_uchar* num_subparts, cl_long total_subparts, int tid);
+                mm128_t * a, cl_int* f, cl_int* p, cl_uchar* num_subparts, cl_long total_subparts, int tid, float hw_time_pred, float sw_time_pred);
 bool hardware_init(long);
 void cleanup();
 

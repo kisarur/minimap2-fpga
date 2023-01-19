@@ -1,7 +1,8 @@
 #include "chain_hardware.h"
 #include "mmpriv.h"
+#include <queue>
 
-// control whether the emulator should be used.
+// control whether the emulator should be used
 static bool use_emulator = false;
 
 using namespace aocl_utils;
@@ -10,25 +11,26 @@ using namespace aocl_utils;
 static cl_platform_id platform = NULL;
 static cl_device_id device = NULL;
 static cl_context context = NULL;
-static cl_command_queue queue[NUM_HW_KERNELS] = {NULL};
+static cl_command_queue command_queue[NUM_HW_KERNELS] = {NULL};
 static cl_kernel kernels[NUM_HW_KERNELS] = {NULL};
 static cl_program program = NULL;
 
-// For input and output buffers
+// for input and output buffers
 cl_mem input_a_buf[NUM_HW_KERNELS];
 cl_mem input_num_subparts_buf[NUM_HW_KERNELS];
 cl_mem output_f_buf[NUM_HW_KERNELS];
 cl_mem output_p_buf[NUM_HW_KERNELS];
 
 pthread_mutex_t hw_lock[NUM_HW_KERNELS] = {PTHREAD_MUTEX_INITIALIZER};
+pthread_mutex_t hw_lock_support[NUM_HW_KERNELS] = {PTHREAD_MUTEX_INITIALIZER};
 
-// int kernel_status[NUM_HW_KERNELS] = {0};
-// pthread_mutex_t status_lock[NUM_HW_KERNELS] = {PTHREAD_MUTEX_INITIALIZER};
-
+double end_times[NUM_HW_KERNELS] = {0};
+queue<int> hw_queue[NUM_HW_KERNELS];
+double start_time = realtime();
 
 // Run chaining on OpenCL hardware
 int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_int q_span, cl_float avg_qspan_scaled,
-                mm128_t * a, cl_int* f, cl_int* p, cl_uchar* num_subparts, cl_long total_subparts, int tid) {
+                mm128_t * a, cl_int* f, cl_int* p, cl_uchar* num_subparts, cl_long total_subparts, int tid, float hw_time_pred, float sw_time_pred) {
     
     if (n == 0) {
         return 0;
@@ -39,56 +41,59 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
         exit(1);
     }
 
-
 #ifdef MEASURE_CHAINING_TIME_HW_FINE    
     double start = realtime();
 #endif
     
-    // scheduling 0 (basic scheduling)
 #if defined(VERIFY_OUTPUT) || !defined(PROCESS_ON_SW_IF_HW_BUSY)
-    pthread_mutex_lock(&hw_lock[0]);
-#else
-    int ret = pthread_mutex_trylock(&hw_lock[0]);
-    if (ret != 0) return -1;
-#endif
-    int kernel_id = 0;
-    
-    // scheduling 1
-    /* int kernel_id = -1;
+    // always process on hardware
+    int kernel_id = -1;
     int ret = -1;
     while (ret != 0) {
         kernel_id = (kernel_id + 1) % NUM_HW_KERNELS;
         ret = pthread_mutex_trylock(&hw_lock[kernel_id]);
-    }  */
+    } 
+#else
+    // intelligently decide whether to process on HW, only if (wait time to access HW + HW processing time) < SW processing time
+    // otherwise, just return to process on software
+    bool should_wait = false;
+    int kernel_id;
+    for (int kernel_id = 0; kernel_id < NUM_HW_KERNELS; kernel_id++) {
+        pthread_mutex_lock(&hw_lock_support[kernel_id]);
+        float curr_time = (realtime() - start_time) * 1000;
+        double total_time = end_times[kernel_id] - curr_time + hw_time_pred;
+        if (total_time <= 0) total_time = hw_time_pred;
 
-    /* 
-    // scheduling 2
-    int kernel_id = -1;
-    int ret = -1;
-    while (ret != 0) {
-        kernel_id++;
-        if (kernel_id >= NUM_HW_KERNELS) {
-            kernel_id = 0;
+        if (total_time < sw_time_pred) {
+            hw_queue[kernel_id].push(tid); // add current task to hardware processing queue
+            end_times[kernel_id] = curr_time + total_time;
+            should_wait = true;
         }
-        ret = pthread_mutex_trylock(&hw_lock[kernel_id]);
-    } */
-   
+        pthread_mutex_unlock(&hw_lock_support[kernel_id]);
 
-    /*
-    // scheduling 3. IMPORTANT: unlock the mutex after chaining is done (i.e. uncomment the lines at the end of chaining)
-    int i = 0;
-    int kernel_id = -1;
-    while (kernel_id == -1) {
-        pthread_mutex_lock(&status_lock[i]);
-        if (kernel_status[i] == 0) {
-            kernel_status[i] = 1;
-            kernel_id = i;
-        }
-        pthread_mutex_unlock(&status_lock[i]);
-        i = (i + 1) % NUM_HW_KERNELS;        
+        if (should_wait) break;
     }
-    pthread_mutex_lock(&hw_lock[kernel_id]);
-    */
+
+    // return if it isn't worth waiting for hardware execution
+    if (!should_wait) return 1;
+
+    // wait until hw_lock is available, see if current task is the next task to process on hw_queue and if so, continue to process it on HW
+    bool got_in = false;
+    while (true) {
+        pthread_mutex_lock(&hw_lock[kernel_id]);
+        
+        pthread_mutex_lock(&hw_lock_support[kernel_id]);
+        if (hw_queue[kernel_id].front() == tid) {
+            hw_queue[kernel_id].pop();
+            got_in = true;
+        }
+        pthread_mutex_unlock(&hw_lock_support[kernel_id]);
+
+        if (got_in) break;
+
+        pthread_mutex_unlock(&hw_lock[kernel_id]);
+    }
+#endif
 
 #ifdef MEASURE_CHAINING_TIME_HW_FINE    
     double kernel_start = realtime();
@@ -100,11 +105,11 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     cl_int status;
 
     // Transfer inputs to device.
-    status = clEnqueueWriteBuffer(queue[kernel_id], input_a_buf[kernel_id], CL_FALSE,
+    status = clEnqueueWriteBuffer(command_queue[kernel_id], input_a_buf[kernel_id], CL_FALSE,
         0, (n + EXTRA_ELEMS) * sizeof(cl_ulong2), a, 0, NULL, &write_event[0]);
     checkError(status, "Failed to transfer input a");
 
-    status = clEnqueueWriteBuffer(queue[kernel_id], input_num_subparts_buf[kernel_id], CL_FALSE,
+    status = clEnqueueWriteBuffer(command_queue[kernel_id], input_num_subparts_buf[kernel_id], CL_FALSE,
         0, (n + EXTRA_ELEMS) * sizeof(cl_uchar), num_subparts, 0, NULL, &write_event[1]);
     checkError(status, "Failed to transfer input num_subparts");
 
@@ -146,7 +151,7 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     status = clSetKernelArg(kernels[kernel_id], 9, sizeof(cl_mem), &input_num_subparts_buf[kernel_id]);
     checkError(status, "Failed to set argument 9");
 
-    status = clEnqueueTask(queue[kernel_id], kernels[kernel_id], 2, write_event, &kernel_event[0]);
+    status = clEnqueueTask(command_queue[kernel_id], kernels[kernel_id], 2, write_event, &kernel_event[0]);
     checkError(status, "Failed to launch kernel");
 
     // Wait until the kernel work is completed.
@@ -157,15 +162,15 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
 #endif
 
     // Read the results. This is the final operation.
-    status = clEnqueueReadBuffer(queue[kernel_id], output_f_buf[kernel_id], CL_FALSE,
+    status = clEnqueueReadBuffer(command_queue[kernel_id], output_f_buf[kernel_id], CL_FALSE,
         0, (n + EXTRA_ELEMS) * sizeof(cl_int), f, 1, kernel_event, &read_event[0]);
 
-    status = clEnqueueReadBuffer(queue[kernel_id], output_p_buf[kernel_id], CL_FALSE,
+    status = clEnqueueReadBuffer(command_queue[kernel_id], output_p_buf[kernel_id], CL_FALSE,
         0, (n + EXTRA_ELEMS) * sizeof(cl_int), p, 1, kernel_event, &read_event[1]);
 
     // Wait for read events to finish.
     //clWaitForEvents(3, read_event);
-    clFinish(queue[kernel_id]);
+    clFinish(command_queue[kernel_id]);
 
 #ifdef DEBUG_HW
     fprintf(stderr, "[INFO] n = %ld on kernel_id = %d output transfer completed\n", n, kernel_id);
@@ -179,15 +184,7 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
         clReleaseEvent(read_event[i]);
     }
 
-    // pthread_mutex_unlock(&hw_lock[kernel_id]);
-    pthread_mutex_unlock(&hw_lock[0]);
-
-    /* 
-    pthread_mutex_lock(&status_lock[kernel_id]);
-    kernel_status[kernel_id] = 0;
-    pthread_mutex_unlock(&status_lock[kernel_id]);
-    */
-
+    pthread_mutex_unlock(&hw_lock[kernel_id]);
  
 #ifdef MEASURE_CHAINING_TIME_HW_FINE    
     fprintf(stderr, "tid: %d, kernel_id: %d, queued_time: %.3f, start_time: %.3f, end_time: %.3f\n", tid, kernel_id, start * 1000, kernel_start * 1000, realtime() * 1000);
@@ -278,8 +275,8 @@ bool hardware_init(long buf_size) {
         kernels[i] = clCreateKernel(program, kernel_name.str().c_str(), &status);
         checkError(status, "Failed to create kernel");
 
-        // Create a seperate queue for kernel.
-        queue[i] = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &status);
+        // Create a seperate command queue for kernel.
+        command_queue[i] = clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &status);
         checkError(status, "Failed to create command queue");
     }
 
@@ -338,9 +335,9 @@ void cleanup() {
     if (program) {
         clReleaseProgram(program);
     }
-    if (queue) {
+    if (command_queue) {
         for (int i = 0; i < NUM_HW_KERNELS; i++) {
-            clReleaseCommandQueue(queue[i]);
+            clReleaseCommandQueue(command_queue[i]);
         }
     }
     if (context) {

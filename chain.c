@@ -86,11 +86,17 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	int32_t * v_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
 #endif
 
+	int q_span_hw;
+	if (n > 0) {
+		q_span_hw = a[0].y>>32&0xff;
+	} else {
+		q_span_hw = 0;
+	}
 
 #ifndef VERIFY_OUTPUT
 	if (hw_time_pred < sw_time_pred) { // execute on HW
 
-		int hw_chain = run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f, p, num_subparts, total_subparts, tid, hw_time_pred, sw_time_pred);
+		int hw_chain = run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, q_span_hw, avg_qspan_scaled, a, f, p, num_subparts, total_subparts, tid, hw_time_pred, sw_time_pred);
 
 #ifdef PROCESS_ON_SW_IF_HW_BUSY
 		if (hw_chain == 0) {
@@ -163,7 +169,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	} else { // execute on SW
 
 #else 
-		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, Q_SPAN, avg_qspan_scaled, a, f_hw, p_hw, num_subparts, total_subparts, tid, hw_time_pred, sw_time_pred);
+		run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, q_span_hw, avg_qspan_scaled, a, f_hw, p_hw, num_subparts, total_subparts, tid, hw_time_pred, sw_time_pred);
 
 		for (i = 0; i < n; ++i) {
 			int32_t max_f = f_hw[i];

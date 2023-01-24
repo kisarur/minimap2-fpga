@@ -48,8 +48,6 @@ using namespace std;
 #define MAX_SUBPARTS 8
 #define MAX_TRIPCOUNT (TRIPCOUNT_PER_SUBPART * MAX_SUBPARTS)
 
-#define Q_SPAN 15 // "seed length" used in hardware chaining. Important: change this if the default seed length used in minimap2 changes 
-
 #define DEVICE_MAX_N 332000000
 #define BUFFER_MAX_N (DEVICE_MAX_N / 2)
 #define BUFFER_N (BUFFER_MAX_N / 32)  // can change the divisor

@@ -21,8 +21,8 @@
 #define K_SW 5.234146622662154e-06
 #define C_SW -1.0015246428158706
 
-#define XCLBIN_FILE "bin/minimap2_opencl.xclbin"  // use this for SW or HW emulation
-// #define XCLBIN_FILE "bin/minimap2_opencl.awsxclbin" // use this for execution on AWS F1 FPGA
+// #define XCLBIN_FILE "bin/minimap2_opencl.xclbin"  // use this for SW or HW emulation
+#define XCLBIN_FILE "bin/minimap2_opencl.awsxclbin" // use this for execution on AWS F1 FPGA
 
 // #define DEBUG_HW          // chain_hardware.cpp (to print out steps in hardware processing)
 // #define VERIFY_OUTPUT       // chain.c (to run both on software and hardware and cross-check the outputs)

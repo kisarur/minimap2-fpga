@@ -2,11 +2,6 @@
 #include "mmpriv.h"
 #include <queue>
 
-// control whether the emulator should be used
-static bool use_emulator = false;
-
-using namespace aocl_utils;
-
 // OpenCL runtime configuration
 static cl_platform_id platform = NULL;
 static cl_device_id device = NULL;
@@ -88,11 +83,11 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
             got_in = true;
         }
         pthread_mutex_unlock(&hw_lock_support[kernel_id]);
-
+   
         if (got_in) break;
 
         pthread_mutex_unlock(&hw_lock[kernel_id]);
-    }
+        }
 #endif
 
 #ifdef MEASURE_CHAINING_TIME_HW_FINE    
@@ -203,74 +198,167 @@ static void device_info_bool( cl_device_id device, cl_device_info param, const c
 static void device_info_string( cl_device_id device, cl_device_info param, const char* name);
 static void display_device_info( cl_device_id device );
 
-bool hardware_init(long buf_size) {
+void checkError(cl_int err, const string message) {
+    if (err != CL_SUCCESS) {
+        std::cout << message << endl;
+        if (err == CL_INVALID_CONTEXT)
+            cout << "CL_INVALID_CONTEXT" << endl;
+        else if (err == CL_INVALID_VALUE )
+            cout << "CL_INVALID_VALUE" << endl;
+        else if (err == CL_INVALID_BUFFER_SIZE  )
+            cout << "CL_INVALID_BUFFER_SIZE" << endl;
+        else if (err == CL_INVALID_HOST_PTR  )
+            cout << "CL_INVALID_HOST_PTR" << endl;
+        else if (err == CL_MEM_OBJECT_ALLOCATION_FAILURE  )
+            cout << "CL_MEM_OBJECT_ALLOCATION_FAILURE" << endl;
+        else if (err == CL_OUT_OF_HOST_MEMORY )
+            cout << "CL_OUT_OF_HOST_MEMORY" << endl;
+        else if (err == CL_INVALID_COMMAND_QUEUE  )
+            cout << "CL_INVALID_COMMAND_QUEUE " << endl;
+        else if (err == CL_INVALID_MEM_OBJECT  )
+            cout << "CL_INVALID_MEM_OBJECT " << endl;
+        else if (err == CL_INVALID_EVENT_WAIT_LIST  )
+            cout << "CL_INVALID_EVENT_WAIT_LIST" << endl;
+        else if (err == CL_OUT_OF_RESOURCES  )
+            cout << "CL_OUT_OF_RESOURCES" << endl;
+        else if (err == CL_OUT_OF_HOST_MEMORY )
+            cout << "CL_OUT_OF_HOST_MEMORY" << endl;
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void *smalloc(size_t size) {
+    void *ptr;
+
+    ptr = malloc(size);
+
+    if (ptr == NULL) {
+        printf("Error: Cannot allocate memory\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return ptr;
+}
+
+static int load_file_to_memory(const char *filename, char **result) {
+    unsigned int size;
+
+    FILE *f = fopen(filename, "rb");
+    if (f == NULL) {
+        *result = NULL;
+        printf("Error: Could not read file %s\n", filename);
+        exit(EXIT_FAILURE);
+    }
+
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    *result = (char *)smalloc(sizeof(char) * (size + 1));
+
+    if (size != fread(*result, sizeof(char), size, f)) {
+        free(*result);
+        printf("Error: read of kernel failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    fclose(f);
+    (*result)[size] = 0;
+
+    return size;
+}
+
+bool hardware_init(long buf_size, char * binaryName) {    
     cl_int status;
+    
+    // *********** OpenCL Host Code Setup **********
 
-    if (!setCwdToExeDir()) {
-        return false;
+    // Connect to first platform
+    int err;
+    char cl_platform_vendor[1001];
+    char cl_platform_name[1001];
+    char cl_device_name[1001];
+
+    // Get number of platforms
+    cl_uint platform_count;
+    clGetPlatformIDs(0, nullptr, &platform_count);
+
+    // get all platforms
+    std::vector<cl_platform_id> platforms(platform_count);
+    clGetPlatformIDs(platform_count, platforms.data(), nullptr);
+
+    bool found = false;
+    for (int p = 0; p < (int)platform_count; ++p) {
+        platform = platforms[p];
+        clGetPlatformInfo(platform,
+                          CL_PLATFORM_VENDOR,
+                          1000,
+                          (void *)cl_platform_vendor,
+                          NULL);
+        clGetPlatformInfo(platform,
+                          CL_PLATFORM_NAME,
+                          1000,
+                          (void *)cl_platform_name,
+                          NULL);
+        if (!strcmp(cl_platform_vendor, "Xilinx")) {
+            found = true;
+            break;
+        }
+        cout << cl_platform_vendor << endl;
+    }
+    if (!found) {
+        std::cout << "Platform Not Found\n";
+        return err;
     }
 
-    // Get the OpenCL platform.
-    if (use_emulator) {
-        platform = findPlatform("Intel(R) FPGA Emulation Platform for OpenCL(TM)");
-    } else {
-        platform = findPlatform("Intel(R) FPGA SDK for OpenCL(TM)");
+    err = clGetDeviceIDs(
+        platform, CL_DEVICE_TYPE_ACCELERATOR, 1, &device, NULL);
+    if (err != CL_SUCCESS) {
+        std::cout << "FAILED TEST - Device\n";
+        return err;
     }
-    if (platform == NULL) {
-        fprintf(stderr, "ERROR: Unable to find Intel(R) FPGA OpenCL platform.\n");
-        return false;
-    }
-
-    // User-visible output - Platform information
-    {
-        char char_buffer[STRING_BUFFER_LEN];
-        fprintf(stderr, "Querying platform for info:\n");
-        fprintf(stderr, "==========================\n");
-        clGetPlatformInfo(platform, CL_PLATFORM_NAME, STRING_BUFFER_LEN, char_buffer, NULL);
-        fprintf(stderr, "%-40s = %s\n", "CL_PLATFORM_NAME", char_buffer);
-        clGetPlatformInfo(platform, CL_PLATFORM_VENDOR, STRING_BUFFER_LEN, char_buffer, NULL);
-        fprintf(stderr, "%-40s = %s\n", "CL_PLATFORM_VENDOR ", char_buffer);
-        clGetPlatformInfo(platform, CL_PLATFORM_VERSION, STRING_BUFFER_LEN, char_buffer, NULL);
-        fprintf(stderr, "%-40s = %s\n\n", "CL_PLATFORM_VERSION ", char_buffer);
-    }
-
-    // Query the available OpenCL devices.
-    scoped_array<cl_device_id> devices;
-    cl_uint num_devices;
-
-    devices.reset(getDevices(platform, CL_DEVICE_TYPE_ALL, &num_devices));
-
-    // We'll just use the first device.
-    device = devices[0];
-
+    
     // Display some device information.
     display_device_info(device);
 
-    // Create the context.
-    context = clCreateContext(NULL, 1, &device, &oclContextCallback, NULL, &status);
-    checkError(status, "Failed to create context");
-
-    // Create the program.
-    std::string binary_file;
-    if (use_emulator) {
-        binary_file = getBoardBinaryFile("minimap2_opencl_emul", device);
-    } else {
-        binary_file = getBoardBinaryFile("minimap2_opencl", device);
+    context = clCreateContext(0, 1, &device, NULL, NULL, &err);
+    if (!context || (err != CL_SUCCESS)) {
+        std::cout << "FAILED TEST - Context \n";
+        return err;
     }
-    fprintf(stderr, "Using AOCX: %s\n", binary_file.c_str());
-    program = createProgramFromBinary(context, binary_file.c_str(), &device, 1);
 
+    clGetDeviceInfo(
+        device, CL_DEVICE_NAME, 1000, (void *)cl_device_name, NULL);
+
+    std::cout << "DEVICE: " << cl_device_name << std::endl;
+
+    std::cout << "Loading Bitstream: " << binaryName << std::endl;
+    char *krnl_bin;
+    size_t krnl_size;
+    krnl_size = load_file_to_memory(binaryName, &krnl_bin);
+
+    printf("INFO: Loaded file\n");
+
+    program = clCreateProgramWithBinary(context,
+                                             1,
+                                             (const cl_device_id *)&device,
+                                             &krnl_size,
+                                             (const unsigned char **)&krnl_bin,
+                                             NULL,
+                                             &err);
+    checkError(err, "Failed to create program");
+  
     // Build the program that was just created.
     status = clBuildProgram(program, 0, NULL, "", NULL, NULL);
     checkError(status, "Failed to build program");
-
+  
     // Create the kernels - name passed in here must match kernel names in the
-    // original CL file, that was compiled into an AOCX file using the AOC tool
+    // original .cl file, that was compiled into an .xclbin file 
     // This also creates a seperate command queue for each kernel
     for (int i = 0; i < NUM_HW_KERNELS; i++) {
         // Generate the kernel name (minimap2_opencl0, minimap2_opencl1, minimap2_opencl2, etc.), as defined in the CL file
         std::ostringstream kernel_name;
-        kernel_name << "minimap2_opencl" << i;
+        kernel_name << "chain" << i;
 
         kernels[i] = clCreateKernel(program, kernel_name.str().c_str(), &status);
         checkError(status, "Failed to create kernel");

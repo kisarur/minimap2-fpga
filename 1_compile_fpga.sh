@@ -1,12 +1,8 @@
 #!/bin/bash
+# "$AWS_FPGA_REPO_DIR/vitis_setup.sh" should be sourced first (i.e. source $AWS_FPGA_REPO_DIR/vitis_setup.sh)
 
 FILE=minimap2_opencl
 
-aocl help > /dev/null || source init_env.sh
-rm -rf bin/*
-aoc device/$FILE.cl -o bin/$FILE.aocx -board=pac_a10 -report
-# aoc device/$FILE.cl -o bin/$FILE.aocx -I $INTELFPGAOCLSDKROOT/include/kernel_headers -board=pac_a10 -report
-mv bin/$FILE.aocx bin/$FILE.tmp.aocx
-printf 'Y\nY\n' | $AOCL_BOARD_PACKAGE_ROOT/linux64/libexec/sign_aocx.sh -H openssl_manager -i bin/$FILE.tmp.aocx -r NULL -k NULL -o bin/$FILE.aocx
-rm bin/$FILE.tmp.aocx
-
+# make cleanall // to remove all the previously built hardware files 
+make build TARGET=hw DEVICE=$AWS_PLATFORM 
+cp build_dir.hw.*.xclbin bin/

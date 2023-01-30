@@ -3,8 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <cstring>
-#include "CL/opencl.h"
-#include "AOCLUtils/aocl_utils.h"
+#include "xcl2.hpp"
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -16,11 +15,14 @@
 
 #include "minimap.h"
 
-#define K1_HW 8.429346604594088e-06
-#define K2_HW 4.219985490696127e-05
-#define C_HW 0.6198209995910657
-#define K_SW 5.237303730088228e-06
-#define C_SW -0.9308447100947506
+#define K1_HW 0.00029920281819506773
+#define K2_HW 1.2153902649654212e-05
+#define C_HW 0.31943459842651833
+#define K_SW 5.234146622662154e-06
+#define C_SW -1.0015246428158706
+
+#define XCLBIN_FILE "bin/minimap2_opencl.xclbin"  // use this for SW or HW emulation
+// #define XCLBIN_FILE "bin/minimap2_opencl.awsxclbin" // use this for execution on AWS F1 FPGA
 
 // #define DEBUG_HW          // chain_hardware.cpp (to print out steps in hardware processing)
 // #define VERIFY_OUTPUT       // chain.c (to run both on software and hardware and cross-check the outputs)
@@ -43,7 +45,7 @@
 using namespace std;
 
 // Important: don't change the values below unless you recompile hardware code (device/minimap2_opencl.cl)
-#define NUM_HW_KERNELS 1
+#define NUM_HW_KERNELS 4
 #define TRIPCOUNT_PER_SUBPART 64
 #define MAX_SUBPARTS 8
 #define MAX_TRIPCOUNT (TRIPCOUNT_PER_SUBPART * MAX_SUBPARTS)
@@ -56,8 +58,9 @@ using namespace std;
 
 int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int bw, cl_int q_span, cl_float avg_qspan,
                 mm128_t * a, cl_int* f, cl_int* p, cl_uchar* num_subparts, cl_long total_subparts, int tid, float hw_time_pred, float sw_time_pred);
-bool hardware_init(long);
+bool hardware_init(long, char *);
 void cleanup();
+void checkError(cl_int err, const string message);
 
 
 

@@ -364,7 +364,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "[WARNING]\033[1;31m `-N 0' reduces alignment accuracy. Please use --secondary=no to suppress secondary alignments.\033[0m\n");
 	
 	// initialize OpenCL FPGA stuff (input/output buffers, kernels, command queues, etc)
-	if (!hardware_init(BUFFER_N)) {
+	if (!hardware_init(BUFFER_N, XCLBIN_FILE)) {
         return -1;
     }
 	

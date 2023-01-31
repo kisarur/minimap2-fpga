@@ -53,7 +53,7 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     // otherwise, just return to process on software
     bool should_wait = false;
     int kernel_id;
-    for (int kernel_id = 0; kernel_id < NUM_HW_KERNELS; kernel_id++) {
+    for (kernel_id = 0; kernel_id < NUM_HW_KERNELS; kernel_id++) {
         pthread_mutex_lock(&hw_lock_support[kernel_id]);
         float curr_time = (realtime() - start_time) * 1000;
         double total_time = end_times[kernel_id] - curr_time + hw_time_pred;

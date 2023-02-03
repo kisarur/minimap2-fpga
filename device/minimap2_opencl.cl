@@ -2,10 +2,10 @@
 #define MM_SEED_SEG_SHIFT  48
 #define MM_SEED_SEG_MASK   (0xffULL<<(MM_SEED_SEG_SHIFT))
 
-#define TRIPCOUNT_PER_SUBPART 64
+#define TRIPCOUNT_PER_SUBPART 128
 #define MAX_SUBPARTS 8
 
-#define PREFETCH_BUFFER_SIZE 32
+#define PREFETCH_BUFFER_SIZE 64
 
 __constant char LogTable256[256] = {
 #define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
@@ -180,7 +180,7 @@ kernel __attribute__((reqd_work_group_size(1, 1, 1))) void chain0(long total_sub
 {
 	chain(total_subparts, max_dist_x, max_dist_y, bw, q_span, avg_qspan_scaled, a, f, p, num_subparts);
 }
-
+/*
 kernel __attribute__((reqd_work_group_size(1, 1, 1))) void chain1(long total_subparts,
                          int max_dist_x, int max_dist_y, int bw, int q_span, float avg_qspan_scaled, 
 						 __global const ulong2 *restrict a,
@@ -207,3 +207,4 @@ kernel __attribute__((reqd_work_group_size(1, 1, 1))) void chain3(long total_sub
 {
 	chain(total_subparts, max_dist_x, max_dist_y, bw, q_span, avg_qspan_scaled, a, f, p, num_subparts);
 }
+*/

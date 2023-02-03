@@ -113,9 +113,9 @@ EMU_DIR = $(SDCARD)/data/emulation
 ############################## Declaring Binary Containers ##############################
 BINARY_CONTAINERS += $(BUILD_DIR)/minimap2_opencl.xclbin
 BINARY_CONTAINER_minimap2_opencl_OBJS += $(TEMP_DIR)/chain0.xo
-BINARY_CONTAINER_minimap2_opencl_OBJS += $(TEMP_DIR)/chain1.xo
-BINARY_CONTAINER_minimap2_opencl_OBJS += $(TEMP_DIR)/chain2.xo
-BINARY_CONTAINER_minimap2_opencl_OBJS += $(TEMP_DIR)/chain3.xo
+# BINARY_CONTAINER_minimap2_opencl_OBJS += $(TEMP_DIR)/chain1.xo
+# BINARY_CONTAINER_minimap2_opencl_OBJS += $(TEMP_DIR)/chain2.xo
+# BINARY_CONTAINER_minimap2_opencl_OBJS += $(TEMP_DIR)/chain3.xo
 
 ############################## Setting Targets ##############################
 CP = cp -rf
@@ -136,15 +136,15 @@ xclbin: build
 $(TEMP_DIR)/chain0.xo: device/minimap2_opencl.cl
 	mkdir -p $(TEMP_DIR)
 	$(VPP) $(VPP_FLAGS) -c -k chain0 --temp_dir $(TEMP_DIR)  -I'$(<D)' -o'$@' '$<'
-$(TEMP_DIR)/chain1.xo: device/minimap2_opencl.cl
-	mkdir -p $(TEMP_DIR)
-	$(VPP) $(VPP_FLAGS) -c -k chain1 --temp_dir $(TEMP_DIR)  -I'$(<D)' -o'$@' '$<'
-$(TEMP_DIR)/chain2.xo: device/minimap2_opencl.cl
-	mkdir -p $(TEMP_DIR)
-	$(VPP) $(VPP_FLAGS) -c -k chain2 --temp_dir $(TEMP_DIR)  -I'$(<D)' -o'$@' '$<'
-$(TEMP_DIR)/chain3.xo: device/minimap2_opencl.cl
-	mkdir -p $(TEMP_DIR)
-	$(VPP) $(VPP_FLAGS) -c -k chain3 --temp_dir $(TEMP_DIR)  -I'$(<D)' -o'$@' '$<'
+# $(TEMP_DIR)/chain1.xo: device/minimap2_opencl.cl
+# 	mkdir -p $(TEMP_DIR)
+# 	$(VPP) $(VPP_FLAGS) -c -k chain1 --temp_dir $(TEMP_DIR)  -I'$(<D)' -o'$@' '$<'
+# $(TEMP_DIR)/chain2.xo: device/minimap2_opencl.cl
+# 	mkdir -p $(TEMP_DIR)
+# 	$(VPP) $(VPP_FLAGS) -c -k chain2 --temp_dir $(TEMP_DIR)  -I'$(<D)' -o'$@' '$<'
+# $(TEMP_DIR)/chain3.xo: device/minimap2_opencl.cl
+# 	mkdir -p $(TEMP_DIR)
+# 	$(VPP) $(VPP_FLAGS) -c -k chain3 --temp_dir $(TEMP_DIR)  -I'$(<D)' -o'$@' '$<'
 $(BUILD_DIR)/minimap2_opencl.xclbin: $(BINARY_CONTAINER_minimap2_opencl_OBJS)
 	mkdir -p $(BUILD_DIR)
 ifeq ($(HOST_ARCH), x86)

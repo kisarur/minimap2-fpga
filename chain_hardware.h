@@ -45,8 +45,8 @@
 using namespace std;
 
 // Important: don't change the values below unless you recompile hardware code (device/minimap2_opencl.cl)
-#define NUM_HW_KERNELS 4
-#define TRIPCOUNT_PER_SUBPART 64
+#define NUM_HW_KERNELS 1
+#define TRIPCOUNT_PER_SUBPART 128
 #define MAX_SUBPARTS 8
 #define MAX_TRIPCOUNT (TRIPCOUNT_PER_SUBPART * MAX_SUBPARTS)
 

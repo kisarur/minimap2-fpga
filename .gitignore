@@ -3,6 +3,7 @@
 .vscode
 .run
 .Xil
+.ipcache/
 build_dir*
 emconfig.json
 .*.swp

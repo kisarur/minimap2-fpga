@@ -200,29 +200,29 @@ static void display_device_info( cl_device_id device );
 
 void checkError(cl_int err, const string message) {
     if (err != CL_SUCCESS) {
-        std::cout << message << endl;
+        std::cerr << message << endl;
         if (err == CL_INVALID_CONTEXT)
-            cout << "CL_INVALID_CONTEXT" << endl;
+            cerr << "CL_INVALID_CONTEXT" << endl;
         else if (err == CL_INVALID_VALUE )
-            cout << "CL_INVALID_VALUE" << endl;
+            cerr << "CL_INVALID_VALUE" << endl;
         else if (err == CL_INVALID_BUFFER_SIZE  )
-            cout << "CL_INVALID_BUFFER_SIZE" << endl;
+            cerr << "CL_INVALID_BUFFER_SIZE" << endl;
         else if (err == CL_INVALID_HOST_PTR  )
-            cout << "CL_INVALID_HOST_PTR" << endl;
+            cerr << "CL_INVALID_HOST_PTR" << endl;
         else if (err == CL_MEM_OBJECT_ALLOCATION_FAILURE  )
-            cout << "CL_MEM_OBJECT_ALLOCATION_FAILURE" << endl;
+            cerr << "CL_MEM_OBJECT_ALLOCATION_FAILURE" << endl;
         else if (err == CL_OUT_OF_HOST_MEMORY )
-            cout << "CL_OUT_OF_HOST_MEMORY" << endl;
+            cerr << "CL_OUT_OF_HOST_MEMORY" << endl;
         else if (err == CL_INVALID_COMMAND_QUEUE  )
-            cout << "CL_INVALID_COMMAND_QUEUE " << endl;
+            cerr << "CL_INVALID_COMMAND_QUEUE " << endl;
         else if (err == CL_INVALID_MEM_OBJECT  )
-            cout << "CL_INVALID_MEM_OBJECT " << endl;
+            cerr << "CL_INVALID_MEM_OBJECT " << endl;
         else if (err == CL_INVALID_EVENT_WAIT_LIST  )
-            cout << "CL_INVALID_EVENT_WAIT_LIST" << endl;
+            cerr << "CL_INVALID_EVENT_WAIT_LIST" << endl;
         else if (err == CL_OUT_OF_RESOURCES  )
-            cout << "CL_OUT_OF_RESOURCES" << endl;
+            cerr << "CL_OUT_OF_RESOURCES" << endl;
         else if (err == CL_OUT_OF_HOST_MEMORY )
-            cout << "CL_OUT_OF_HOST_MEMORY" << endl;
+            cerr << "CL_OUT_OF_HOST_MEMORY" << endl;
         exit(EXIT_FAILURE);
     }
 }
@@ -233,7 +233,7 @@ static void *smalloc(size_t size) {
     ptr = malloc(size);
 
     if (ptr == NULL) {
-        printf("Error: Cannot allocate memory\n");
+        fprintf(stderr, "Error: Cannot allocate memory\n");
         exit(EXIT_FAILURE);
     }
 
@@ -246,7 +246,7 @@ static int load_file_to_memory(const char *filename, char **result) {
     FILE *f = fopen(filename, "rb");
     if (f == NULL) {
         *result = NULL;
-        printf("Error: Could not read file %s\n", filename);
+        fprintf(stderr, "Error: Could not read file %s\n", filename);
         exit(EXIT_FAILURE);
     }
 
@@ -258,7 +258,7 @@ static int load_file_to_memory(const char *filename, char **result) {
 
     if (size != fread(*result, sizeof(char), size, f)) {
         free(*result);
-        printf("Error: read of kernel failed\n");
+        fprintf(stderr, "Error: read of kernel failed\n");
         exit(EXIT_FAILURE);
     }
 
@@ -304,17 +304,17 @@ bool hardware_init(long buf_size, char * binaryName) {
             found = true;
             break;
         }
-        cout << cl_platform_vendor << endl;
+        cerr << cl_platform_vendor << endl;
     }
     if (!found) {
-        std::cout << "Platform Not Found\n";
+        fprintf(stderr, "Platform Not Found\n");
         return err;
     }
 
     err = clGetDeviceIDs(
         platform, CL_DEVICE_TYPE_ACCELERATOR, 1, &device, NULL);
     if (err != CL_SUCCESS) {
-        std::cout << "FAILED TEST - Device\n";
+        fprintf(stderr, "FAILED TEST - Device\n");
         return err;
     }
     
@@ -323,21 +323,21 @@ bool hardware_init(long buf_size, char * binaryName) {
 
     context = clCreateContext(0, 1, &device, NULL, NULL, &err);
     if (!context || (err != CL_SUCCESS)) {
-        std::cout << "FAILED TEST - Context \n";
+        fprintf(stderr, "FAILED TEST - Context\n");
         return err;
     }
 
     clGetDeviceInfo(
         device, CL_DEVICE_NAME, 1000, (void *)cl_device_name, NULL);
 
-    std::cout << "DEVICE: " << cl_device_name << std::endl;
+    fprintf(stderr, "DEVICE: %s\n", cl_device_name);
 
-    std::cout << "Loading Bitstream: " << binaryName << std::endl;
+    fprintf(stderr, "Loading Bitstream: %s\n", binaryName);
     char *krnl_bin;
     size_t krnl_size;
     krnl_size = load_file_to_memory(binaryName, &krnl_bin);
 
-    printf("INFO: Loaded file\n");
+    fprintf(stderr, "INFO: Loaded file\n");
 
     program = clCreateProgramWithBinary(context,
                                              1,

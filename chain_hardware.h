@@ -15,6 +15,7 @@
 
 #include "minimap.h"
 
+// Parameters used for HW/SW split
 #define K1_HW 0.00029920281819506773
 #define K2_HW 1.2153902649654212e-05
 #define C_HW 0.31943459842651833
@@ -23,6 +24,8 @@
 
 // #define XCLBIN_FILE "bin/minimap2_opencl.xclbin"  // use this for SW or HW emulation
 #define XCLBIN_FILE "bin/minimap2_opencl.awsxclbin" // use this for execution on AWS F1 FPGA
+
+// #define FIND_HWSW_PARAMS  // to print details that are used to find HW/SW split parameters above 
 
 // #define DEBUG_HW          // chain_hardware.cpp (to print out steps in hardware processing)
 // #define VERIFY_OUTPUT       // chain.c (to run both on software and hardware and cross-check the outputs)

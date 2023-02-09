@@ -40,6 +40,8 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
     double start = realtime();
 #endif
     
+#ifndef FIND_HWSW_PARAMS
+
 #if defined(VERIFY_OUTPUT) || !defined(PROCESS_ON_SW_IF_HW_BUSY)
     // always process on hardware
     int kernel_id = -1;
@@ -88,6 +90,11 @@ int run_chaining_on_hw(cl_long n, cl_int max_dist_x, cl_int max_dist_y, cl_int b
 
         pthread_mutex_unlock(&hw_lock[kernel_id]);
         }
+#endif
+
+#else // FIND_HWSW_PARAMS
+    pthread_mutex_lock(&hw_lock[0]);
+    int kernel_id = 0;
 #endif
 
 #ifdef MEASURE_CHAINING_TIME_HW_FINE    

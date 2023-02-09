@@ -80,7 +80,7 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	
 	/*--------- HW/SW time prediction End ------------*/
 
-#ifdef VERIFY_OUTPUT
+#if defined(VERIFY_OUTPUT) || defined(FIND_HWSW_PARAMS)
 	int32_t * f_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
 	int32_t * p_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
 	int32_t * v_hw = (int32_t*)malloc((n + EXTRA_ELEMS) * sizeof(int32_t));
@@ -92,6 +92,8 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	} else {
 		q_span_hw = 0;
 	}
+
+#ifndef FIND_HWSW_PARAMS
 
 #ifndef VERIFY_OUTPUT
 	if (hw_time_pred < sw_time_pred) { // execute on HW
@@ -257,7 +259,89 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	free(tc);
 #endif
 
-kfree(km, num_subparts);
+#else // FIND_HWSW_PARAMS 
+
+    if (tid > 0) {
+		fprintf(stderr, "[Error] minimap2 should run only with a single thread (-t 1) when finding HW/SW split parameters\n");
+        exit(1);
+    }
+
+    double hw_start = realtime();
+	run_chaining_on_hw(n, max_dist_x, max_dist_y, bw, q_span_hw, avg_qspan_scaled, a, f_hw, p_hw, num_subparts, total_subparts, tid, hw_time_pred, sw_time_pred);
+    double hw_time = (realtime() - hw_start) * 1000;
+    
+    double sw_start = realtime();
+    st = 0;
+    for (i = 0; i < n; ++i) {
+        uint64_t ri = a[i].x;
+        int64_t max_j = -1;
+        int32_t qi = (int32_t)a[i].y, q_span = a[i].y>>32&0xff; // NB: only 8 bits of span is used!!!
+        int32_t max_f = q_span, n_skip = 0, min_d;
+        int32_t sidi = (a[i].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
+        while (st < i && ri > a[st].x + max_dist_x) ++st;
+        if (i - st > max_iter) st = i - max_iter;
+
+#ifdef VERIFY_OUTPUT
+        for (j = i - 1; j >= st && j > (i - MAX_TRIPCOUNT - 1); --j) {
+#else
+        for (j = i - 1; j >= st; --j) {
+#endif
+            int64_t dr = ri - a[j].x;
+            int32_t dq = qi - (int32_t)a[j].y, dd, sc, log_dd, gap_cost;
+            int32_t sidj = (a[j].y & MM_SEED_SEG_MASK) >> MM_SEED_SEG_SHIFT;
+            if ((sidi == sidj && dr == 0) || dq <= 0) continue; // don't skip if an anchor is used by multiple segments; see below
+            if ((sidi == sidj && dq > max_dist_y) || dq > max_dist_x) continue;
+            dd = dr > dq? dr - dq : dq - dr;
+            if (sidi == sidj && dd > bw) continue;
+            if (n_segs > 1 && !is_cdna && sidi == sidj && dr > max_dist_y) continue;
+            min_d = dq < dr? dq : dr;
+            sc = min_d > q_span? q_span : dq < dr? dq : dr;
+            log_dd = dd? ilog2_32(dd) : 0;
+            gap_cost = 0;
+            if (is_cdna || sidi != sidj) {
+                int c_log, c_lin;
+                c_lin = (int)(dd * avg_qspan_scaled);
+                c_log = log_dd;
+                if (sidi != sidj && dr == 0) ++sc; // possibly due to overlapping paired ends; give a minor bonus
+                else if (dr > dq || sidi != sidj) gap_cost = c_lin < c_log? c_lin : c_log;
+                else gap_cost = c_lin + (c_log>>1);
+            } else gap_cost = (int)(dd * avg_qspan_scaled) + (log_dd>>1);
+            sc -= (int)((double)gap_cost * gap_scale + .499);
+            sc += f[j];
+
+#if !defined(ENABLE_MAX_SKIP_ON_SW) || defined(VERIFY_OUTPUT)
+            if (sc > max_f) {
+                max_f = sc, max_j = j;
+            } 
+#else
+            if (sc > max_f) {
+                max_f = sc, max_j = j;
+                if (n_skip > 0) --n_skip;
+            } else if (t[j] == i) {
+                if (++n_skip > max_skip)
+                    break;
+            }
+            if (p[j] >= 0) t[p[j]] = i;
+#endif
+        }
+        f[i] = max_f, p[i] = max_j;
+    }
+    double sw_time = (realtime() - sw_start) * 1000;
+
+    fprintf(stderr, "param %ld\t%ld\t%ld\t%.3f\t%.3f\n", n, total_subparts, total_trip_count, hw_time, sw_time);
+
+    for (i = 0; i < n; ++i) {
+        int32_t max_f = f[i];
+        int64_t max_j = p[i];
+        v[i] = max_j >= 0 && v[max_j] > max_f? v[max_j] : max_f; // v[] keeps the peak score up to i; f[] is the score ending at i, not always the peak
+    }
+
+    free(f_hw);
+	free(p_hw);
+	free(v_hw);
+#endif
+
+	kfree(km, num_subparts);
 
 	// find the ending positions of chains
 	memset(t, 0, n * 4);

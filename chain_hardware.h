@@ -16,11 +16,11 @@
 #include "minimap.h"
 
 // Parameters used for HW/SW split
-#define K1_HW 0.00029920281819506773
-#define K2_HW 1.2153902649654212e-05
-#define C_HW 0.31943459842651833
-#define K_SW 5.234146622662154e-06
-#define C_SW -1.0015246428158706
+#define K1_HW 0.00015880136988084205
+#define K2_HW 2.0434022672867257e-05
+#define C_HW 0.29147412805014916
+#define K_SW 3.0803281020398428e-06
+#define C_SW -5.074490710236282
 
 // #define XCLBIN_FILE "bin/minimap2_opencl.xclbin"  // use this for SW or HW emulation
 #define XCLBIN_FILE "bin/minimap2_opencl.awsxclbin" // use this for execution on AWS F1 FPGA

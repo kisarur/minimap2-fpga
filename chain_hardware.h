@@ -16,12 +16,19 @@
 
 #include "minimap.h"
 
-// Parameters used for HW/SW split
-#define K1_HW 8.429346604594088e-06
-#define K2_HW 4.219985490696127e-05
-#define C_HW 0.6198209995910657
-#define K_SW 5.237303730088228e-06
-#define C_SW -0.9308447100947506
+// Parameters used for HW/SW split (ONT)
+// #define K1_HW 8.429346604594088e-06
+// #define K2_HW 4.219985490696127e-05
+// #define C_HW 0.6198209995910657
+// #define K_SW 5.237303730088228e-06
+// #define C_SW -0.9308447100947506
+
+// Parameters used for HW/SW split (PacBio CCS)
+#define K1_HW 7.437323634999326e-06
+#define K2_HW 4.2380603263944086e-05
+#define C_HW 0.5800485806078544
+#define K_SW 6.786967941956902e-06
+#define C_SW -8.476899785564488
 
 // #define FIND_HWSW_PARAMS  // to print details that are used to find HW/SW split parameters above 
 

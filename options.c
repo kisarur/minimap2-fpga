@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <limits.h>
 #include "mmpriv.h"
+#include "chain_hardware.h"
+
+float K1_HW, K2_HW, C_HW, K_SW, C_SW;
 
 void mm_idxopt_init(mm_idxopt_t *opt)
 {
@@ -89,6 +92,11 @@ int mm_set_opt(const char *preset, mm_idxopt_t *io, mm_mapopt_t *mo)
 		io->flag |= MM_I_HPC, io->k = 19;
 	} else if (strcmp(preset, "map-ont") == 0) {
 		io->flag = 0, io->k = 15;
+		K1_HW = ONT_K1_HW;
+		K2_HW = ONT_K2_HW;
+		C_HW = ONT_C_HW;
+		K_SW = ONT_K_SW;
+		C_SW = ONT_C_SW;
 	} else if (strcmp(preset, "asm5") == 0) {
 		io->flag = 0, io->k = 19, io->w = 19;
 		mo->a = 1, mo->b = 19, mo->q = 39, mo->q2 = 81, mo->e = 3, mo->e2 = 1, mo->zdrop = mo->zdrop_inv = 200;
@@ -107,6 +115,11 @@ int mm_set_opt(const char *preset, mm_idxopt_t *io, mm_mapopt_t *mo)
 		mo->min_mid_occ = 100;
 		mo->min_dp_max = 200;
 		mo->best_n = 50;
+		K1_HW = PBCCS_K1_HW;
+		K2_HW = PBCCS_K2_HW;
+		C_HW = PBCCS_C_HW;
+		K_SW = PBCCS_K_SW;
+		C_SW = PBCCS_C_SW;
 	} else if (strcmp(preset, "short") == 0 || strcmp(preset, "sr") == 0) {
 		io->flag = 0, io->k = 21, io->w = 11;
 		mo->flag |= MM_F_SR | MM_F_FRAG_MODE | MM_F_NO_PRINT_2ND | MM_F_2_IO_THREADS | MM_F_HEAP_SORT;

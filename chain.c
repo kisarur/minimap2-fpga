@@ -6,6 +6,8 @@
 #include "kalloc.h"
 #include "chain_hardware.h"
 
+extern float K1_HW, K2_HW, C_HW, K_SW, C_SW;
+
 #ifdef MEASURE_CORE_CHAINING_TIME
 extern double core_chaining_time_total;
 #endif

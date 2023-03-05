@@ -9,7 +9,7 @@
 #include "chain_hardware.h"
 
 #ifdef MEASURE_CORE_CHAINING_TIME
-	double core_chaining_time_total;
+double core_chaining_time_total;
 #endif
 
 #define MM_VERSION "2.18-r1015"
@@ -113,6 +113,10 @@ static inline void yes_or_no(mm_mapopt_t *opt, int flag, int long_idx, const cha
 
 int main(int argc, char *argv[])
 {
+#ifdef MEASURE_CORE_CHAINING_TIME
+	core_chaining_time_total = 0;
+#endif
+
 	const char *opt_str = "2aSDw:k:K:t:r:f:Vv:g:G:I:d:XT:s:x:Hcp:M:n:z:A:B:O:E:m:N:Qu:R:hF:LC:yYPo:";
 	ketopt_t o = KETOPT_INIT;
 	mm_mapopt_t opt;
@@ -435,6 +439,10 @@ int main(int argc, char *argv[])
 		for (i = 0; i < argc; ++i)
 			fprintf(stderr, " %s", argv[i]);
 		fprintf(stderr, "\n[M::%s] Real time: %.3f sec; CPU: %.3f sec; Peak RSS: %.3f GB\n", __func__, realtime() - mm_realtime0, cputime(), peakrss() / 1024.0 / 1024.0 / 1024.0);
+	
+#ifdef MEASURE_CORE_CHAINING_TIME
+		fprintf(stderr, "[M::%s] Core chaining time: %.3f sec\n", __func__, core_chaining_time_total);
+#endif
 	}
 
 	

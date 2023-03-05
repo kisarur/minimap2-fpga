@@ -45,6 +45,10 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 	v = (int32_t*)kmalloc(km, n * 4);
 	memset(t, 0, n * 4);
 
+#ifdef MEASURE_CORE_CHAINING_TIME
+	double chain_start = realtime();
+#endif
+
 	for (i = 0; i < n; ++i) sum_qspan += a[i].y>>32&0xff;
 	avg_qspan_scaled = .01 * (float)sum_qspan / n;
 
@@ -344,6 +348,10 @@ mm128_t *mm_chain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int m
 #endif
 
 	kfree(km, num_subparts);
+
+#ifdef MEASURE_CORE_CHAINING_TIME
+	core_chaining_time_total += (realtime() - chain_start);
+#endif
 
 	// find the ending positions of chains
 	memset(t, 0, n * 4);

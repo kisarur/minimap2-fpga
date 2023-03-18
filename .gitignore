@@ -6,6 +6,7 @@
 *.o
 *.dSYM
 minimap2
+minimap2_fpga
 mappy.c
 bin/
 results/

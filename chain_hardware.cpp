@@ -262,7 +262,7 @@ bool hardware_init(long buf_size) {
     if (use_emulator) {
         binary_file = getBoardBinaryFile("minimap2_opencl_emul", device);
     } else {
-        binary_file = getBoardBinaryFile("minimap2_opencl", device);
+        binary_file = getBoardBinaryFile("bin/minimap2_opencl", device);
     }
     fprintf(stderr, "Using AOCX: %s\n", binary_file.c_str());
     program = createProgramFromBinary(context, binary_file.c_str(), &device, 1);

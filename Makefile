@@ -56,6 +56,7 @@ CXX := g++
 # Target
 TARGET := host
 TARGET_DIR := bin
+EXECUTABLE := minimap2_fpga
 
 # Directories
 INC_DIRS := opencl/inc
@@ -67,7 +68,7 @@ SRCS := $(wildcard *.cpp  main.c opencl/src/AOCLUtils/*.cpp)
 LIBS := rt pthread m z
 
 # Make it all!
-all : $(TARGET_DIR)/$(TARGET)
+all : $(EXECUTABLE)
 
 OBJS=		kthread.o kalloc.o misc.o bseq.o sketch.o sdust.o options.o index.o chain.o align.o hit.o map.o format.o pe.o esterr.o splitidx.o ksw2_ll_sse.o
 
@@ -94,16 +95,13 @@ endif
 endif
 
 # Host executable target.
-$(TARGET_DIR)/$(TARGET) : Makefile $(OBJS) $(SRCS)  $(INCS) $(TARGET_DIR) 
+$(EXECUTABLE) : Makefile $(OBJS) $(SRCS)  $(INCS) $(TARGET_DIR) 
 	$(ECHO)$(CXX) $(CPPFLAGS) $(CXXFLAGS) -fPIC $(foreach D,$(INC_DIRS),-I$D) \
 			$(AOCL_COMPILE_CONFIG) $(SRCS) $(OBJS) $(AOCL_LINK_CONFIG) \
 			$(foreach D,$(LIB_DIRS),-L$D) \
 			$(foreach L,$(LIBS),-l$L) \
-			-o $(TARGET_DIR)/$(TARGET)
+			-o $(EXECUTABLE)
 
-$(TARGET_DIR) :
-	$(ECHO)mkdir $(TARGET_DIR)
-	
 
 .PHONY:all extra clean depend
 .SUFFIXES:.c .o
@@ -154,7 +152,7 @@ ksw2_exts2_neon.o:ksw2_exts2_sse.c ksw2.h kalloc.h
 
 clean:
 	rm -fr gmon.out *.o a.out $(PROG) $(PROG_EXTRA) *~ *.a *.dSYM build dist mappy*.so mappy.c python/mappy.c mappy.egg*
-	$(ECHO)rm -f $(TARGET_DIR)/$(TARGET)		
+	$(ECHO)rm -f $(EXECUTABLE)		
 
 depend:
 	(LC_ALL=C; export LC_ALL; makedepend -Y -- $(CFLAGS) $(CPPFLAGS) -- *.c)

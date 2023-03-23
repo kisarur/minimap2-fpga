@@ -29,7 +29,6 @@
 #define PBCCS_K_SW 3.0803281020398428e-06
 #define PBCCS_C_SW -5.074490710236282
 
-// #define XCLBIN_FILE "bin/minimap2_opencl.xclbin"  // use this for SW or HW emulation
 #define XCLBIN_FILE "bin/minimap2_opencl.awsxclbin" // use this for execution on AWS F1 FPGA
 
 // #define FIND_HWSW_PARAMS  // to print details that are used to find HW/SW split parameters above 

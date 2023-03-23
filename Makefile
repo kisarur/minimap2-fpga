@@ -106,7 +106,7 @@ endif
 
 
 
-EXECUTABLE = ./minimap2
+EXECUTABLE = ./minimap2_fpga
 EMCONFIG_DIR = $(TEMP_DIR)
 EMU_DIR = $(SDCARD)/data/emulation
 

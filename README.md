@@ -21,7 +21,7 @@ cd minimap2_fpga_opencl
 
 3. [OPTIONAL] If you use Xilinx UltraScale+ VU9P based FPGA board available on AWS EC2 F1 instance, for which our accelerator implementation (on this branch) is optimized, it is recommended that you use the already built FPGA hardware binary (also called AFI - Amazon FPGA Image) included with this repo at `bin/minimap2_opencl.awsxclbin`. However, if you want to build this AFI from source (in `device/minimap2_opencl.cl`), you can use the guide available at https://github.com/aws/aws-fpga/tree/master/Vitis (as recommended on the guide, using a non-F1 EC2 compute instance for this time-consuming hardware build step will help minimize costs).
 
-4. If minimap2_fpga is to be used for the first time in the system, the parameters used in splitting the chaining tasks for hardware and software executions, need to be first trained. A small (~500K reads) representative dataset (\<query\>) corresponding to the target minimap2 configuration[^1] (<minimap2_configuration>) should be used with the reference human genome (\<reference\>)  for this training process. Note that this one-time process can take hours to complete depending on the size of the training dataset.
+4. If minimap2_fpga is to be used for the first time in the system, the parameters used in splitting the chaining tasks for hardware and software executions, need to be first trained. A small (~500K reads) representative dataset (\<query\>) corresponding to the target minimap2 configuration<sup>1</sup> (<minimap2_configuration>) should be used with the reference human genome (\<reference\>)  for this training process. Note that this one-time process can take hours to complete depending on the size of the training dataset.
 
    1. Use the commands below to train the parameters (requires Python 3 with numpy and scikit-learn packages installed).  
    ```
@@ -47,16 +47,16 @@ cd minimap2_fpga_opencl
 
    2. The parameters in `chain_hardware.h` for the relavent dataset type (i.e. ONT, PacBio CCS) should now be replaced with the parameters obtained above. For example, if the parameter training was performed for ONT datasets, the values for `ONT_K1_HW, ONT_K2_HW, ONT_C_HW, ONT_K_SW, ONT_C_SW` in `chain_hardware.h` should be replaced with values obtained above for `K1_HW, K2_HW, C_HW, K_SW, C_SW` respectively. 
 
-3. Use the commands below to build the host application and run FPGA-accelerated Minimap2 with the relative arugments[^1]. (Note: absolute paths should be used for filepath arguments when running minimap2_fpga)
+3. Use the commands below to build the host application and run FPGA-accelerated Minimap2 with the relative arugments<sup>1</sup>.
 ```
 make host
 ./minimap2_fpga [minimap2 arguments]
-(e.g. ./minimap2_fpga -x map-ont <absolute path to reference sequence> <absolute path to query sequence>)
+(e.g. ./minimap2_fpga -x map-ont <reference> <query>)
 ```
 
 ## Notes
 
-[^1]: Currently, only `map-ont` and `asm20` configurations of Minimap2 are supported. Please contact us if you want more configurations to be added.
+1. Currently, only `map-ont` and `asm20` configurations of Minimap2 are supported. Please contact us if you want more configurations to be added.
 
 <hr>
 

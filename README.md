@@ -1,3 +1,67 @@
+# FPGA-accelerated Minimap2
+
+This work presents an end-to-end integrated FPGA-accelerated solution for the gold-standard third generation genomics sequence analysis tool - [Minimap2](https://github.com/lh3/minimap2). The solution integrates an FPGA-based hardware accelerator designed for the chaining step of the tool (top hotspot of the tool for most of the configurations), with the rest of the software carefully so that a speed-up in tool’s end-to-end time is achieved. 
+
+
+## Getting Started 
+
+1. Create an [Amazon EC2 F1 instance](https://aws.amazon.com/ec2/instance-types/f1/)  loaded with [FPGA Developer AMI](https://aws.amazon.com/marketplace/pp/prodview-gimv3gqbpe57k) (AWS *f1.2xlarge* instance loaded with *FPGA Developer AMI Version 1.12.1* was used in this work).
+
+2. Use the commands below to download the [AWS EC2 FPGA Development Kit](https://github.com/aws/aws-fpga) and setup the runtime environment.
+```
+git clone https://github.com/aws/aws-fpga.git $AWS_FPGA_REPO_DIR
+source $AWS_FPGA_REPO_DIR/vitis_runtime_setup.sh
+```
+
+2. Use the commands below to download this work's GitHub repo and change to project directory.
+```
+git clone git@github.com:kisarur/minimap2_fpga_opencl.git -b minimap2_v2.18_fpga_xilinx
+cd minimap2_fpga_opencl
+``` 
+
+3. [OPTIONAL] If you use Xilinx UltraScale+ VU9P based FPGA board available on AWS EC2 F1 instance, for which our accelerator implementation (on this branch) is optimized, it is recommended that you use the already built FPGA hardware binary (also called AFI - Amazon FPGA Image) included with this repo at `bin/minimap2_opencl.awsxclbin`. However, if you want to build this AFI from source (in `device/fpga/minimap2_opencl.cl`), you can use the guide available at https://github.com/aws/aws-fpga/tree/master/Vitis (as recommended on the guide, using a non-F1 EC2 compute instance for this time-consuming hardware build step will help minimize costs).
+
+4. If minimap2_fpga is to be used for the first time in the system, the parameters used in splitting the chaining tasks for hardware and software executions, need to be first trained. A small (~500K reads) representative dataset (\<query\>) corresponding to the target minimap2 configuration[^1] (<minimap2_configuration>) should be used with the reference human genome (\<reference\>)  for this training process. Note that this one-time process can take hours to complete depending on the size of the training dataset.
+
+   1. Use the commands below to train the parameters (requires Python 3 with numpy and scikit-learn packages installed).  
+   ```
+   cd hw_sw_split
+   ./find_hw_sw_split_params.sh <minimap2_configuration> <reference> <query>
+   (e.g. ./find_hw_sw_split_params.sh map-ont hg38noAlt.fa reads.fastq)
+
+   cd ../
+   ```
+
+   Given below is a sample output of the above command, that contains the hardware-software split parameters.
+
+   ```
+   ----------------------
+   HW/SW split parameters
+   ----------------------
+   K1_HW   : 7.8272969079034e-06
+   K2_HW   : 4.216579210613027e-05
+   C_HW    : 0.5789597220291505
+   K_SW    : 8.14078022400557e-06
+   C_SW    : -3.3955657611056456
+   ```
+
+   2. The parameters in `chain_hardware.h` for the relavent dataset type (i.e. ONT, PacBio CCS) should now be replaced with the parameters obtained above. For example, if the parameter training was performed for ONT datasets, the values for `ONT_K1_HW, ONT_K2_HW, ONT_C_HW, ONT_K_SW, ONT_C_SW` in `chain_hardware.h` should be replaced with values obtained above for `K1_HW, K2_HW, C_HW, K_SW, C_SW` respectively. 
+
+3. Use the commands below to build the host application and run FPGA-accelerated Minimap2 with the relative arugments[^1]. (Note: absolute paths should be used for filepath arguments when running minimap2_fpga)
+```
+make host
+./minimap2_fpga [minimap2 arguments]
+(e.g. ./minimap2_fpga -x map-ont <absolute path to reference sequence> <absolute path to query sequence>)
+```
+
+## Notes
+
+[^1]: Currently, only `map-ont` and `asm20` configurations of Minimap2 are supported. Please contact us if you want more configurations to be added.
+
+<hr>
+
+The README content of original minimap2 software is copied below.
+
 [![GitHub Downloads](https://img.shields.io/github/downloads/lh3/minimap2/total.svg?style=social&logo=github&label=Download)](https://github.com/lh3/minimap2/releases)
 [![BioConda Install](https://img.shields.io/conda/dn/bioconda/minimap2.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/minimap2)
 [![PyPI](https://img.shields.io/pypi/v/mappy.svg?style=flat)](https://pypi.python.org/pypi/mappy)

@@ -14,15 +14,17 @@ cd minimap2_fpga_opencl
 source opencl/init_env.sh
 ```
 
-3. To build the hardware binary (.aocx) for the hardware accelerator from OpenCL source (.cl), use the given `generate_fpga_binary.sh` script. Please note that this build process can take hours to complete. Skip this step if you want to use the already built FPGA binary (for "Intel Arria 10 GX" device) located at `bin/minimap2_opencl.aocx`.
+3. [OPTIONAL] If you use Intel Arria 10 GX FPGA device, for which our accelerator implementation (on this branch) is optimized, it is recommended that you use the already built FPGA hardware binary included with this repo at `bin/minimap2_opencl.aocx`. However, if you want to build this binary from source (in `device/minimap2_opencl.cl`), you can use the `generate_fpga_binary.sh` script included in the repo.
 
-4. If minimap2_fpga is to be used for the first time in the system, the parameters used in splitting the chaining tasks for hardware and software executions, need to be first trained. A small (~500K reads) representative dataset (\<query\>) corresponding to the target minimap2 configuration (currently, only `map-ont` and `asm20` are supported) should be used with the reference human genome (\<reference\>)  for this training process. Note that this one-time process can take hours to complete depending on the size of the training dataset.
+
+4. If minimap2_fpga is to be used for the first time in the system, the parameters used in splitting the chaining tasks for hardware and software executions, need to be first trained. A small (~500K reads) representative dataset (\<query\>) corresponding to the target minimap2 configuration<sup>1</sup> (<minimap2_configuration>) should be used with the reference human genome (\<reference\>)  for this training process. Note that this one-time process can take hours to complete depending on the size of the training dataset.
 
    1. Use the commands below to train the parameters (requires Python 3 with numpy and scikit-learn packages installed).  
    ```
    cd hw_sw_split
    ./find_hw_sw_split_params.sh <minimap2_configuration> <reference> <query>
    (e.g. ./find_hw_sw_split_params.sh map-ont hg38noAlt.fa reads.fastq)
+   
    cd ../
    ```
 
@@ -41,12 +43,18 @@ source opencl/init_env.sh
 
    2. The parameters in `chain_hardware.h` for the relavent dataset type (i.e. ONT, PacBio CCS) should now be replaced with the parameters obtained above. For example, if the parameter training was performed for ONT datasets, the values for `ONT_K1_HW, ONT_K2_HW, ONT_C_HW, ONT_K_SW, ONT_C_SW` in `chain_hardware.h` should be replaced with values obtained above for `K1_HW, K2_HW, C_HW, K_SW, C_SW` respectively. 
 
-3. Use the commands below to build the host application and run FPGA-accelerated Minimap2 with the relative arugments. (Note: absolute paths should be used for filepath arguments when running minimap2_fpga)
+3. Use the commands below to build the host application and run FPGA-accelerated Minimap2 with the relative arugments<sup>1</sup>. (Note: absolute paths should be used for filepath arguments when running minimap2_fpga)
 ```
 make
 ./minimap2_fpga [minimap2 arguments]
 (e.g. ./minimap2_fpga -x map-ont <absolute path to reference sequence> <absolute path to query sequence>)
 ```
+
+## Notes
+
+1. Currently, only `map-ont` and `asm20` configurations of Minimap2 are supported. Please contact us if you want more configurations to be added.
+
+<hr>
 
 The README content of original minimap2 software is copied below.
 

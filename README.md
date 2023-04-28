@@ -15,7 +15,7 @@ source $AWS_FPGA_REPO_DIR/vitis_runtime_setup.sh
 
 2. Use the commands below to download this work's GitHub repo and change to project directory.
 ```
-git clone git@github.com:kisarur/minimap2_fpga_opencl.git
+git clone git@github.com:kisarur/minimap2-fpga.git
 cd minimap2-fpga
 ``` 
 

@@ -9,8 +9,8 @@ This work presents an end-to-end integrated FPGA-accelerated solution for the go
 
 2. Use the commands below to download the GitHub repo and setup the environment (you may need to update the variables defined in `opencl/init_env.sh`, if they're not already pointing to the correct paths in your system).
 ```
-git clone git@github.com:kisarur/minimap2_fpga_opencl.git
-cd minimap2_fpga_opencl
+git clone git@github.com:kisarur/minimap2-fpga.git
+cd minimap2-fpga
 source opencl/init_env.sh
 ```
 

@@ -56,7 +56,7 @@ CXX := g++
 # Target
 TARGET := host
 TARGET_DIR := bin
-EXECUTABLE := minimap2_fpga
+EXECUTABLE := minimap2-fpga
 
 # Directories
 INC_DIRS := opencl/inc

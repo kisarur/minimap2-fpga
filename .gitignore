@@ -11,7 +11,7 @@ emconfig.json
 *.o
 *.dSYM
 *.log
-minimap2_fpga
+minimap2-fpga
 mappy.c
 _x*
 bin/

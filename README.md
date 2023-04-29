@@ -21,7 +21,7 @@ cd minimap2-fpga
 
 3. [OPTIONAL] If you use Xilinx UltraScale+ VU9P based FPGA board available on AWS EC2 F1 instance, for which our accelerator implementation (on this branch) is optimized, it is recommended that you use the already built FPGA hardware binary (also called AFI - Amazon FPGA Image) included with this repo at `bin/minimap2_opencl.awsxclbin`. However, if you want to build this AFI from source (in `device/minimap2_opencl.cl`), you can use the guide available at https://github.com/aws/aws-fpga/tree/master/Vitis (as recommended on the guide, using a non-F1 EC2 compute instance for this time-consuming hardware build step will help minimize costs).
 
-4. If minimap2_fpga is to be used for the first time in the system, the parameters used in splitting the chaining tasks for hardware and software executions, need to be first trained. A small (~500K reads) representative dataset (\<query\>) corresponding to the target minimap2 configuration<sup>1</sup> (<minimap2_configuration>) should be used with the reference human genome (\<reference\>)  for this training process. Note that this one-time process can take hours to complete depending on the size of the training dataset.
+4. If *minimap2-fpga* is to be used for the first time in the system, the parameters used in splitting the chaining tasks for hardware and software executions, need to be first trained. A small (~500K reads) representative dataset (\<query\>) corresponding to the target minimap2 configuration<sup>1</sup> (<minimap2_configuration>) should be used with the reference human genome (\<reference\>)  for this training process. Note that this one-time process can take hours to complete depending on the size of the training dataset.
 
    1. Use the commands below to train the parameters (requires Python 3 with numpy and scikit-learn packages installed).  
    ```
@@ -50,8 +50,8 @@ cd minimap2-fpga
 3. Use the commands below to build the host application and run FPGA-accelerated Minimap2 with the relative arugments<sup>1</sup>.
 ```
 make host
-./minimap2_fpga [minimap2 arguments]
-(e.g. ./minimap2_fpga -x map-ont <reference> <query>)
+./minimap2-fpga [minimap2 arguments]
+(e.g. ./minimap2-fpga -x map-ont <reference> <query>)
 ```
 
 ## Notes

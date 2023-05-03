@@ -1,6 +1,6 @@
 # FPGA-accelerated Minimap2
 
-This work presents an end-to-end integrated FPGA-accelerated solution for the gold-standard third generation genomics sequence analysis tool - [Minimap2](https://github.com/lh3/minimap2). The solution integrates an FPGA-based hardware accelerator designed for the chaining step of the tool (top hotspot of the tool for most of the configurations), with the rest of the software carefully so that a speed-up in tool’s end-to-end time is achieved. 
+This work presents an end-to-end integrated FPGA-accelerated solution for the gold-standard third generation genomics sequence analysis tool - [Minimap2](https://github.com/lh3/minimap2). The solution carefully integrates an FPGA-based hardware accelerator designed for the chaining step of the tool (top hotspot of the tool for most of the configurations), with the rest of the software so that a speed-up in tool’s end-to-end time is achieved. 
 
 
 ## Getting Started 
@@ -21,7 +21,7 @@ cd minimap2-fpga
 
 3. [OPTIONAL] If you use Xilinx UltraScale+ VU9P based FPGA board available on AWS EC2 F1 instance, for which our accelerator implementation (on this branch) is optimized, it is recommended that you use the already built FPGA hardware binary (also called AFI - Amazon FPGA Image) included with this repo at `bin/minimap2_opencl.awsxclbin`. However, if you want to build this AFI from source (in `device/minimap2_opencl.cl`), you can use the guide available at https://github.com/aws/aws-fpga/tree/master/Vitis (as recommended on the guide, using a non-F1 EC2 compute instance for this time-consuming hardware build step will help minimize costs).
 
-4. If *minimap2-fpga* is to be used for the first time in the system, the parameters used in splitting the chaining tasks for hardware and software executions, need to be first trained. A small (~500K reads) representative dataset (\<query\>) corresponding to the target minimap2 configuration<sup>1</sup> (<minimap2_configuration>) should be used with the reference human genome (\<reference\>)  for this training process. Note that this one-time process can take hours to complete depending on the size of the training dataset.
+4. If *minimap2-fpga* is to be used for the first time in the system, the parameters used in splitting the chaining tasks for hardware and software executions, need to be first trained. A small (~500K reads) representative dataset (\<query\>) corresponding to the target minimap2 configuration<sup>1</sup> (<minimap2_configuration>) should be used with the reference human genome (\<reference\>)  for this training process. Note that this one-time process can take couple of hours to complete depending on the size of the training dataset.
 
    1. Use the commands below to train the parameters (requires Python 3 with numpy and scikit-learn packages installed).  
    ```
@@ -47,7 +47,7 @@ cd minimap2-fpga
 
    2. The parameters in `chain_hardware.h` for the relavent dataset type (i.e. ONT, PacBio CCS) should now be replaced with the parameters obtained above. For example, if the parameter training was performed for ONT datasets, the values for `ONT_K1_HW, ONT_K2_HW, ONT_C_HW, ONT_K_SW, ONT_C_SW` in `chain_hardware.h` should be replaced with values obtained above for `K1_HW, K2_HW, C_HW, K_SW, C_SW` respectively. 
 
-3. Use the commands below to build the host application and run FPGA-accelerated Minimap2 with the relative arugments<sup>1</sup>.
+3. Use the commands below to build the host application and run FPGA-accelerated Minimap2 with the relative arguments<sup>1</sup>.
 ```
 make host
 ./minimap2-fpga [minimap2 arguments]
@@ -60,7 +60,7 @@ make host
 
 <hr>
 
-The README content of original minimap2 software is copied below.
+The README content of original [minimap2](https://github.com/lh3/minimap2) software is copied below.
 
 [![GitHub Downloads](https://img.shields.io/github/downloads/lh3/minimap2/total.svg?style=social&logo=github&label=Download)](https://github.com/lh3/minimap2/releases)
 [![BioConda Install](https://img.shields.io/conda/dn/bioconda/minimap2.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/minimap2)

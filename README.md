@@ -1,4 +1,4 @@
-# FPGA-accelerated Minimap2
+# minimap2-fpga: FPGA-accelerated Minimap2
 
 This work presents an end-to-end integrated FPGA-accelerated solution for the gold-standard third generation genomics sequence analysis tool - [Minimap2](https://github.com/lh3/minimap2). The solution integrates an FPGA-based hardware accelerator designed for the chaining step of the tool (top hotspot of the tool for most of the configurations), with the rest of the software carefully so that a speed-up in tool’s end-to-end time is achieved. 
 
@@ -9,7 +9,7 @@ This work presents an end-to-end integrated FPGA-accelerated solution for the go
 
 2. Use the commands below to download the GitHub repo and setup the environment (you may need to update the variables defined in `opencl/init_env.sh`, if they're not already pointing to the correct paths in your system).
 ```
-git clone git@github.com:kisarur/minimap2-fpga.git -b intel
+git clone https://github.com/kisarur/minimap2-fpga.git -b intel
 cd minimap2-fpga
 source opencl/init_env.sh
 ```

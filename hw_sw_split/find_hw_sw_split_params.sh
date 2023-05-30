@@ -19,7 +19,7 @@ reads=$(realpath $3)
 
 # get minimap2_fpga_opencl from GitHub if it's not already downloaded
 if [ ! -d minimap2_fpga_param_search  ]; then
-    git clone git@github.com:kisarur/minimap2_fpga_opencl.git minimap2_fpga_param_search
+    git clone https://github.com/kisarur/minimap2-fpga.git -b intel minimap2_fpga_param_search
     check_error "Git clone failed."
     echo "[INFO] Git clone success."
 fi

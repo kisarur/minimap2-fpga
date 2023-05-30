@@ -1,4 +1,4 @@
-# FPGA-accelerated Minimap2
+# minimap2-fpga: FPGA-accelerated Minimap2
 
 This work presents an end-to-end integrated FPGA-accelerated solution for the gold-standard third generation genomics sequence analysis tool - [Minimap2](https://github.com/lh3/minimap2). The solution carefully integrates an FPGA-based hardware accelerator designed for the chaining step of the tool (top hotspot of the tool for most of the configurations), with the rest of the software so that a speed-up in tool’s end-to-end time is achieved. 
 
@@ -15,7 +15,7 @@ source $AWS_FPGA_REPO_DIR/vitis_runtime_setup.sh
 
 2. Use the commands below to download this work's GitHub repo and change to project directory.
 ```
-git clone git@github.com:kisarur/minimap2-fpga.git
+git clone https://github.com/kisarur/minimap2-fpga.git
 cd minimap2-fpga
 ``` 
 
